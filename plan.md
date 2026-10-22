@@ -1,4 +1,4 @@
-# Plan: Geohashing
+# Plan: GeoQuest
 
 Kort stappenplan code:
 
