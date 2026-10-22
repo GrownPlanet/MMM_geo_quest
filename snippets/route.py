@@ -5,11 +5,21 @@ import folium
 mapbox_token = "pk.eyJ1IjoibW9oc2Vubm91cmF6YXIiLCJhIjoiY20weGZuMDlyMGU5NjJsc2M5bW95bW9seiJ9.QRH-VA6s7SnSXHFHkMYg1w"
 
 def get_location_by_address(address):
-    g = geocoder.mapbox(address, key=mapbox_token)
-    return f"{g.latlng[1]},{g.latlng[0]}"
+    default_location = "51.05853791437679,3.7195113227485783"
+    try:
+        g = geocoder.mapbox(address, key=mapbox_token)
+        if g is None or not g.ok or g.latlng is None:
+            print(f"Address '{address}' not found. Using default location.")
+            return default_location
+        return f"{g.latlng[1]},{g.latlng[0]}"
+    except Exception as e:
+        print(f"Geocoding failed: {e}. Using default location.")
+        return default_location
 
 def get_current_location():
     g = geocoder.ip("me")
+    if g is None or g.latlng is None:
+        return "51.05853791437679, 3.7195113227485783"
     return f"{g.latlng[1]},{g.latlng[0]}"
 
 def get_route_points(location, destination):
@@ -68,4 +78,4 @@ def plot_route(route_points):
 
     return m
 
-#plot_route(get_route_points(get_current_location(), get_location_by_address("Groeneweg 43, 987 Olsene"))[2]).save("route_map.html")
+plot_route(get_route_points(get_location_by_address("penitentenstraat 22, gent"), get_location_by_address("jozef plateau gebouw"))[2]).save("route_map.html")
