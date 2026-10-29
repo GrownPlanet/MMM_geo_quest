@@ -1,5 +1,5 @@
 /*
- * Get the location from the gps and display it on the OLED LCD
+ * Get the location from the gps and display it on the OLED display
  */
 
 

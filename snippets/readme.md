@@ -1,3 +1,3 @@
 # Snippets
 
-stukjes code die later nog handig gaan zijn
+Stukjes code die later nog handig gaan zijn
