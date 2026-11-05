@@ -41,7 +41,6 @@ class GeoQuest:
 
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
-        self.app.attributes("-fullscreen", True)
 
         self.create_start_screen()
 
