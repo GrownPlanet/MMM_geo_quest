@@ -1,5 +1,10 @@
 # MMM GeoQuest
 
+## Setup
+
+- zet de `MAPBOX_TOKEN` in `.env`
+- installeer `requirements.txt`: `pip install -r requirements.txt`
+
 ## TODO's
 
 ### Computer
@@ -37,3 +42,5 @@ Kort stappenplan code:
 - `snippets/`: snippets code die later nog handig kunnen zijn
 - `arduino/navigator`: de broncode voor op de arduino
 - `computer`: de broncode voor op de computer
+- `.env`: environment variabelen
+- `.env.example`: voorbeeld environment variabelen
