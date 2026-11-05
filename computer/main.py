@@ -41,6 +41,7 @@ class GeoQuest:
 
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
+        
         self.create_start_screen()
 
     def create_start_screen(self):
