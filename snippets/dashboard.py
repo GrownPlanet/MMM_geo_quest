@@ -16,6 +16,15 @@ app.attributes("-fullscreen", True)
 app.title("GeoQuest")
 
 
+# TODO: deze functie herimplementeren
+# 
+# Er wordt nu een punt binnen een cirkel gekozen, maar het is geen goede manier
+# om een willikeurig punt te kiezen binnen gent. Er is nu namelijk meer kans
+# dat het dicht bij het belfort is dan er verder van (verdeling is niet
+# volledig uniform)
+#
+# Ik stel voor dat we een punt binnnen een rechthoek nemen en de 1ste helft van
+# het nummer de x-coordinaat laten selecteren en de 2de helft het y-coordinaat.
 def word_to_location(word: str) -> tuple[float, float]:
     """Hash het woord en map het naar een punt binnen 3 km rond het Belfort.
     Retourneert (longitude, latitude) klaar voor upload naar Arduino.
