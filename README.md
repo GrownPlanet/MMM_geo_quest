@@ -1,5 +1,21 @@
 # MMM GeoQuest
 
+## TODO's
+
+### Computer
+
+- [ ] korste pad genereren
+- [ ] MQTT server communicatie
+
+### Arduino
+
+- [ ] MQTT server communicatie
+  - [ ] huidige punt ophalen
+  - [ ] aankomst aangeven
+- [ ] richting naar volgende punt
+- [ ] aankomst detecteren
+- [ ] richting aangeven op display
+
 ## Plan
 
 Kort stappenplan code:
