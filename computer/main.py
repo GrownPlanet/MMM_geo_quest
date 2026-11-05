@@ -1,6 +1,11 @@
+from dotenv import load_dotenv
 import customtkinter
+import folium
+import geocoder
 import hashlib
 import math
+import os
+import requests
 
 # Belfort van Gent als centrum
 BELFORT_LAT = 51.0537
@@ -8,6 +13,44 @@ BELFORT_LON = 3.7250
 
 AREA_SIZE_KM = 3.0
 HALF_AREA_KM = AREA_SIZE_KM / 2
+
+load_dotenv()
+
+MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+
+def get_route_points(location: tuple[float, float], destination: tuple[float, float]):
+    location_str = f"{location[0]},{location[1]}"
+    destination_str = f"{destination[0]},{destination[1]}"
+
+    data = requests.get(
+        f"https://api.mapbox.com/directions/v5/mapbox/walking/{location_str};{destination_str}",
+        params={
+            "access_token": MAPBOX_TOKEN,
+            "geometries": "geojson"
+        }
+    )
+
+    directions = data.json()
+
+    if directions.get("code") != "Ok":
+        print("Mapbox error:", directions)
+        return (
+            "Distance: / km",
+            "Duration: / minutes",
+            []
+        )
+
+    route = directions["routes"][0]
+
+    distance_km = route["distance"] / 1000
+    duration_min = route["duration"] / 60
+    route_points = route["geometry"]["coordinates"]
+
+    return (
+        f"Distance: {distance_km:.2f} km",
+        f"Duration: {duration_min:.0f} minutes",
+        route_points
+    )
 
 def word_to_location(word: str) -> tuple[float, float]:
     """Hash the word and map it uniformly to a 3 km x 3 km square
@@ -88,9 +131,12 @@ class GeoQuest:
         print(f"Starting game with word: {self.word}")
         print(f"Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
 
-        self.create_game_screen(lon, lat)
+        dist_str, dur_str, points = get_route_points((BELFORT_LON, BELFORT_LAT), (lon, lat))
+        print(points)
 
-    def create_game_screen(self, lon, lat):
+        self.create_game_screen(dist_str, dur_str, lon, lat)
+
+    def create_game_screen(self, dist, dur, lon, lat):
         self.start_button.destroy()
         self.text_input.destroy()
         self.title_label.destroy()
@@ -101,6 +147,7 @@ class GeoQuest:
                 f"Game started!\n"
                 f"Word: {self.word}\n"
                 f"Destination: {lon:.6f}, {lat:.6f}\n"
+                f"{dist}\n{dur}\n"
                 f"Check your Arduino!"
             ),
             font=("Arial", 18)
