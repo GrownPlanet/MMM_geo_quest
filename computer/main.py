@@ -17,7 +17,7 @@ load_dotenv()
 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
 
-def get_route_points(location: tuple[float, float], destination: tuple[float, float]):
+def get_route_points(location: tuple[float, float], destination: tuple[float, float]) -> tuple[str, str, list[list[float]]]:
     location_str = f"{location[0]},{location[1]}"
     destination_str = f"{destination[0]},{destination[1]}"
 
@@ -77,16 +77,16 @@ def word_to_location(word: str) -> tuple[float, float]:
     return lon, lat
 
 class GeoQuest:
-    def __init__(self):
-        self.word = None
-        self.destination = None
+    def __init__(self) -> None:
+        self.word: str | None = None
+        self.destination: tuple[float, float] | None = None
 
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
         
         self.create_start_screen()
 
-    def create_start_screen(self):
+    def create_start_screen(self) -> None:
         self.title_label = customtkinter.CTkLabel(
             self.app,
             text="Welcome to GeoQuest!",
@@ -116,7 +116,7 @@ class GeoQuest:
         self.text_input.place(relx=0.5, rely=0.4, anchor="center")
         self.start_button.place(relx=0.5, rely=0.5, anchor="center")
 
-    def start_game(self):
+    def start_game(self) -> None:
         word = self.text_input.get()
 
         if not word:
@@ -135,7 +135,7 @@ class GeoQuest:
 
         self.create_game_screen(dist_str, dur_str, lon, lat)
 
-    def create_game_screen(self, dist, dur, lon, lat):
+    def create_game_screen(self, dist: str, dur: str, lon: float, lat: float) -> None:
         self.start_button.destroy()
         self.text_input.destroy()
         self.title_label.destroy()
@@ -154,7 +154,7 @@ class GeoQuest:
 
         self.start_text.place(relx=0.5, rely=0.5, anchor="center")
 
-    def run(self):
+    def run(self) -> None:
         self.app.mainloop()
 
 
