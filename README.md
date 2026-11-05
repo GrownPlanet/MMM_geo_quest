@@ -9,8 +9,10 @@
 
 ### Computer
 
-- [ ] korste pad genereren
+- [x] korste pad genereren
 - [ ] MQTT server communicatie
+  - [ ] initiële locatie opvragen
+  - [ ] difficulty opvragen
 
 ### Arduino
 

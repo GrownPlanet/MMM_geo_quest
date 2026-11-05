@@ -132,6 +132,7 @@ class GeoQuest:
         print(f"Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
 
         dist_str, dur_str, points = get_route_points((BELFORT_LON, BELFORT_LAT), (lon, lat))
+        print(points)
 
         self.create_game_screen(dist_str, dur_str, lon, lat)
 
