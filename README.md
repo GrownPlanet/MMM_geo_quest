@@ -23,7 +23,7 @@ Kort stappenplan code:
 1. naam ingeven
 2. hashen
 3. omzetten naar locatie binnen Gent
-4. roette aanvragen
+4. route aanvragen
 5. moeilijkheid selecteren
 6. aantal kruispunten op basis van moeilijkheid
 7. volgende punt wordt aan arduino gegeven
