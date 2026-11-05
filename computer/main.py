@@ -1,11 +1,10 @@
-from dotenv import load_dotenv
-import customtkinter
-import folium
-import geocoder
 import hashlib
 import math
 import os
+
+import customtkinter
 import requests
+from dotenv import load_dotenv
 
 # Belfort van Gent als centrum
 BELFORT_LAT = 51.0537

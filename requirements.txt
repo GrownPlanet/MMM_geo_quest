@@ -1,3 +1,2 @@
 customtkinter
 python-dotenv
-folium
