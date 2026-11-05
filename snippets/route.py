@@ -3,7 +3,7 @@ import geocoder
 import folium
 import math
 
-mapbox_token = "pk.eyJ1IjoibW9oc2Vubm91cmF6YXIiLCJhIjoiY20weGZuMDlyMGU5NjJsc2M5bW95bW9seiJ9.QRH-VA6s7SnSXHFHkMYg1w"
+mapbox_token = "<redacted>"
 
 def get_location_by_address(address):
     g = geocoder.mapbox(address, key=mapbox_token)
