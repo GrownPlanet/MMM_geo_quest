@@ -34,37 +34,85 @@ def word_to_location(word: str) -> tuple[float, float]:
 
     return lon, lat
 
-word = None
-destination = None  # (longitude, latitude) voor Arduino
+class GeoQuest:
+    def __init__(self):
+        self.word = None
+        self.destination = None
 
-def start_game():
-    global word, destination
-    word = text_input.get() if text_input.get() else None
-    if word:
-        destination = word_to_location(word)
-        lon, lat = destination
-        print(f"Starting game with word: {word}")
-        print(f"Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
-        start.destroy()
-        start_text = customtkinter.CTkLabel(
-            app,
-            text=f"Game started!\nWord: {word}\nDestination: {lon:.6f}, {lat:.6f}\nCheck your Arduino!",
-            font=("Arial", 18),
+        self.app = customtkinter.CTk()
+        self.app.title("GeoQuest")
+        self.app.attributes("-fullscreen", True)
+
+        self.create_start_screen()
+
+    def create_start_screen(self):
+        self.title_label = customtkinter.CTkLabel(
+            self.app,
+            text="Welcome to GeoQuest!",
+            font=("Arial", 24)
         )
-        start_text.place(relx=0.5, rely=0.5, anchor="center")
+
+        self.text_input = customtkinter.CTkEntry(
+            self.app,
+            placeholder_text="Enter a word",
+            width=200,
+            height=30,
+            border_width=2,
+            corner_radius=10
+        )
+
+        self.start_button = customtkinter.CTkButton(
+            self.app,
+            text="Start Game",
+            command=self.start_game,
+            width=200,
+            height=30,
+            border_width=2,
+            corner_radius=10
+        )
+
+        self.title_label.place(relx=0.5, rely=0.2, anchor="center")
+        self.text_input.place(relx=0.5, rely=0.4, anchor="center")
+        self.start_button.place(relx=0.5, rely=0.5, anchor="center")
+
+    def start_game(self):
+        word = self.text_input.get()
+
+        if not word:
+            return
+
+        self.word = word
+        self.destination = word_to_location(word)
+
+        lon, lat = self.destination
+
+        print(f"Starting game with word: {self.word}")
+        print(f"Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
+
+        self.create_game_screen(lon, lat)
+
+    def create_game_screen(self, lon, lat):
+        self.start_button.destroy()
+        self.text_input.destroy()
+        self.title_label.destroy()
+
+        self.start_text = customtkinter.CTkLabel(
+            self.app,
+            text=(
+                f"Game started!\n"
+                f"Word: {self.word}\n"
+                f"Destination: {lon:.6f}, {lat:.6f}\n"
+                f"Check your Arduino!"
+            ),
+            font=("Arial", 18)
+        )
+
+        self.start_text.place(relx=0.5, rely=0.5, anchor="center")
+
+    def run(self):
+        self.app.mainloop()
+
 
 if __name__ == "__main__":
-    app = customtkinter.CTk()
-    app.title("My App")
-    app.attributes("-fullscreen", True)
-    app.title("GeoQuest")
-    
-    title_label = customtkinter.CTkLabel(app, text="Welcome to GeoQuest!", font=("Arial", 24))
-    text_input = customtkinter.CTkEntry(app, placeholder_text="Enter a word", width=200, height=30, border_width=2, corner_radius=10)
-    start = customtkinter.CTkButton(app, text="Start Game", command=start_game, width=200, height=30, border_width=2, corner_radius=10)
-    
-    title_label.place(relx=0.5, rely=0.2, anchor="center")
-    text_input.place(relx=0.5, rely=0.4, anchor="center")
-    start.place(relx=0.5, rely=0.5, anchor="center")
-    
-    app.mainloop()
+    game = GeoQuest()
+    game.run()
