@@ -23,6 +23,10 @@
 - [ ] aankomst detecteren
 - [ ] richting aangeven op display
 
+### Extra (indien er tijd over is)
+
+- [ ] afgelegde weg tonen
+
 ## Plan
 
 Kort stappenplan code:
