@@ -5,6 +5,8 @@ import os
 import customtkinter
 import requests
 from dotenv import load_dotenv
+from PIL import Image
+from pathlib import Path
 
 # Belfort van Gent als centrum
 BELFORT_LAT = 51.0537
@@ -16,6 +18,8 @@ HALF_AREA_KM = AREA_SIZE_KM / 2
 load_dotenv()
 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+
+BASE_DIR = Path(__file__).resolve().parent
 
 def get_route_points(location: tuple[float, float], destination: tuple[float, float]) -> tuple[str, str, list[list[float]]]:
     location_str = f"{location[0]},{location[1]}"
@@ -83,6 +87,7 @@ class GeoQuest:
 
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
+        self.app.geometry("600x400")
         
         self.create_start_screen()
 
@@ -112,14 +117,35 @@ class GeoQuest:
             corner_radius=10
         )
 
+        self.error_label = customtkinter.CTkLabel(
+            self.app,
+            text="Please enter a word to start the game.",
+            font=("Arial", 14),
+            text_color="red"
+        )
+
+        self.image = customtkinter.CTkImage(
+            light_image=Image.open(BASE_DIR / "../media/logo.png"),
+            dark_image=Image.open(BASE_DIR / "../media/logo.png"),
+            size=(100, 100)
+        )
+
+        self.image_label = customtkinter.CTkLabel(
+            self.app,
+            image=self.image,
+            text=""
+        )
+
         self.title_label.place(relx=0.5, rely=0.2, anchor="center")
         self.text_input.place(relx=0.5, rely=0.4, anchor="center")
         self.start_button.place(relx=0.5, rely=0.5, anchor="center")
+        self.image_label.place(relx=0.5, rely=0.7, anchor="center")
 
     def start_game(self) -> None:
         word = self.text_input.get()
 
         if not word:
+            self.error_label.place(relx=0.5, rely=0.3, anchor="center")
             return
 
         self.word = word
@@ -139,7 +165,8 @@ class GeoQuest:
         self.start_button.destroy()
         self.text_input.destroy()
         self.title_label.destroy()
-
+        self.image_label.destroy()
+        self.error_label.destroy()
         self.start_text = customtkinter.CTkLabel(
             self.app,
             text=(
