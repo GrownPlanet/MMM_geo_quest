@@ -10,6 +10,7 @@
 ### Computer
 
 - [x] korste pad genereren
+- [x] difficulty toepassen
 - [ ] MQTT server communicatie
   - [ ] initiële locatie opvragen
   - [ ] difficulty opvragen
@@ -45,12 +46,12 @@ De berichten die de computer kan sturen zijn als volgt:
 
 Kort stappenplan code:
 
-1. naam ingeven
-2. hashen
-3. omzetten naar locatie binnen Gent
-4. route aanvragen
-5. moeilijkheid selecteren
-6. aantal kruispunten op basis van moeilijkheid
+1. naam ingeven [x]
+2. hashen [x]
+3. omzetten naar locatie binnen Gent [x]
+4. route aanvragen [x]
+5. moeilijkheid selecteren [x]
+6. aantal kruispunten op basis van moeilijkheid [x]
 7. volgende punt wordt aan arduino gegeven
 8. richting bepalen en weergeven
    - door middel van gps en IMU
