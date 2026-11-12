@@ -91,7 +91,7 @@ def get_route(origin: Coordinate, destination: Coordinate) -> Route:
     return Route(
         distance=f"Distance: {route['distance'] / 1000:.2f} km",
         duration=f"Duration: {route['duration'] / 60:.0f} minutes",
-        points=route["geometry"]["coordinates"],
+        points=route["geometry"]["coordinates"] + [destination],
     )
 
 
@@ -261,16 +261,16 @@ class GeoQuest:
 
     def calculate_points_with_difficulty(self, points: list[list[float]]) -> list[list[float]]:
         if self.difficulty == "Easy":
-            return points[::1]
+            return points
         elif self.difficulty == "Medium":
             return points[::2]
         elif self.difficulty == "Hard":
             return points[::4]
         elif self.difficulty == "Expert":
-            return points
+            return [points[-1]]
         else:
             print("Warning: unrecognized difficulty level, defaulting to Easy")
-            return points[::1]
+            return points
 
     def wait_for_location(self) -> None:
         current_location = None

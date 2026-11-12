@@ -11,9 +11,11 @@
 
 - [x] korste pad genereren
 - [x] difficulty toepassen
-- [ ] MQTT server communicatie
-  - [ ] initiële locatie opvragen
-  - [ ] difficulty opvragen
+- [x] MQTT server communicatie
+  - [x] initiële locatie opvragen
+- [x] difficulty vragen
+- [ ] main loop
+- [ ] aantal punten in easy, medium, hard en expert bespreken
 
 ### Arduino
 
