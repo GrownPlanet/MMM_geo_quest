@@ -124,6 +124,22 @@ class GeoQuest:
         print(f"Info: Received on {msg.topic}: {message}")
 
     def create_start_screen(self) -> None:
+        self.user_manual_pictogram = customtkinter.CTkImage(
+            light_image=Image.open(BASE_DIR / "../media/user_manual_black.png"),
+            dark_image=Image.open(BASE_DIR / "../media/user_manual_white.png"),
+            size=(50, 50)
+        )
+        self.user_manual_button = customtkinter.CTkButton(
+            self.app,
+            image=self.user_manual_pictogram,
+            text="",
+            command=self.open_user_manual,
+            width=50,
+            height=50,
+            border_width=1,
+            fg_color="transparent",
+        )
+
         self.title_label = customtkinter.CTkLabel(
             self.app,
             text="Welcome to GeoQuest!",
@@ -176,11 +192,19 @@ class GeoQuest:
             text=""
         )
 
+        self.user_manual_button.place(relx=0.9, rely=0.9, anchor="center")
         self.title_label.place(relx=0.5, rely=0.2, anchor="center")
         self.text_input.place(relx=0.5, rely=0.4, anchor="center")
         self.difficulty_menu.place(relx=0.5, rely=0.5, anchor="center")
         self.start_button.place(relx=0.5, rely=0.6, anchor="center")
         self.image_label.place(relx=0.5, rely=0.8, anchor="center")
+    
+    def open_user_manual(self) -> None:
+        manual_path = BASE_DIR / "../user_manual.md"
+        if manual_path.exists():
+            os.startfile(manual_path)
+        else:
+            print("Error: User manual not found.")
 
     def start_game(self) -> None:
         word = self.text_input.get()
