@@ -149,6 +149,14 @@ class GeoQuest:
             corner_radius=10
         )
 
+        self.difficulty_menu = customtkinter.CTkOptionMenu(
+            self.app,
+            values=["Easy", "Medium", "Hard", "Expert"],
+            width=200,
+            height=30,
+            corner_radius=10
+        )
+
         self.error_label = customtkinter.CTkLabel(
             self.app,
             text="Please enter a word to start the game.",
@@ -170,11 +178,13 @@ class GeoQuest:
 
         self.title_label.place(relx=0.5, rely=0.2, anchor="center")
         self.text_input.place(relx=0.5, rely=0.4, anchor="center")
-        self.start_button.place(relx=0.5, rely=0.5, anchor="center")
-        self.image_label.place(relx=0.5, rely=0.7, anchor="center")
+        self.difficulty_menu.place(relx=0.5, rely=0.5, anchor="center")
+        self.start_button.place(relx=0.5, rely=0.6, anchor="center")
+        self.image_label.place(relx=0.5, rely=0.8, anchor="center")
 
     def start_game(self) -> None:
         word = self.text_input.get()
+        difficulty = self.difficulty_menu.get()
 
         if not word:
             self.error_label.place(relx=0.5, rely=0.3, anchor="center")
@@ -182,11 +192,13 @@ class GeoQuest:
 
         self.word = word
         self.destination = word_to_location(word)
+        self.difficulty = difficulty
 
         lon, lat = self.destination
 
         print(f"Info: Starting game with word: {self.word}")
         print(f"Info: Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
+        print(f"Info: Difficulty level: {self.difficulty}")
 
         self.location_screen()
 
@@ -197,6 +209,7 @@ class GeoQuest:
         self.title_label.destroy()
         self.image_label.destroy()
         self.error_label.destroy()
+        self.difficulty_menu.destroy()
 
         self.wait_text = customtkinter.CTkLabel(
             self.app,
@@ -206,6 +219,19 @@ class GeoQuest:
         self.wait_text.place(relx=0.5, rely=0.5, anchor="center")
 
         self.wait_for_location()
+
+    def calculate_points_with_difficulty(self, points: list[list[float]]) -> list[list[float]]:
+        if self.difficulty == "Easy":
+            return points[::1]
+        elif self.difficulty == "Medium":
+            return points[::2]
+        elif self.difficulty == "Hard":
+            return points[::3]
+        elif self.difficulty == "Expert":
+            return points[::4]
+        else:
+            print("Warning: unrecognized difficulty level, defaulting to Easy")
+            return points[::1]
 
     def wait_for_location(self):
         got_location = False
@@ -227,6 +253,7 @@ class GeoQuest:
             dist_str, dur_str, points = get_route_points((curr_lon, curr_lat), (dest_lon, dest_lat))
             print("Debug: points on path", points)
 
+            points = self.calculate_points_with_difficulty(points)
             self.create_game_screen(dist_str, dur_str)
         else:
             self.app.after(100, self.wait_for_location)
