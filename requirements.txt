@@ -1,2 +1,5 @@
 customtkinter
 python-dotenv
+paho-mqtt
+requests
+pillow
