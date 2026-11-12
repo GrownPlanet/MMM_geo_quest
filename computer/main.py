@@ -223,7 +223,7 @@ class GeoQuest:
 
     def start_game(self) -> None:
         word = self.text_input.get()
-        difficulty = self.difficulty_menu.get()
+        self.difficulty = self.difficulty_menu.get()
 
         if not word:
             self.error_label.place(relx=0.5, rely=0.3, anchor="center")
