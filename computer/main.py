@@ -44,7 +44,7 @@ def get_route_points(location: tuple[float, float], destination: tuple[float, fl
     directions = data.json()
 
     if directions.get("code") != "Ok":
-        print("Mapbox error:", directions)
+        print("Error: Mapbox", directions)
         return (
             "Distance: / km",
             "Duration: / minutes",
@@ -114,12 +114,12 @@ class GeoQuest:
         self.client.disconnect()
 
     def on_connect(self, client, _userdata, _flags, _reason_code, _properties):
-        print("Connected to MQTT broker!")
+        print("Info: Connected to MQTT broker!")
         client.subscribe(IN_TOPIC)
 
     def on_message(self, client, userdata, msg):
         message = msg.payload.decode()
-        print(f"Received on {msg.topic}: {message}")
+        print(f"Info: Received on {msg.topic}: {message}")
 
     def create_start_screen(self) -> None:
         self.title_label = customtkinter.CTkLabel(
@@ -183,11 +183,11 @@ class GeoQuest:
 
         lon, lat = self.destination
 
-        print(f"Starting game with word: {self.word}")
-        print(f"Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
+        print(f"Info: Starting game with word: {self.word}")
+        print(f"Info: Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
 
         dist_str, dur_str, points = get_route_points((BELFORT_LON, BELFORT_LAT), (lon, lat))
-        print(points)
+        print("Debug: points on path", points)
 
         self.create_game_screen(dist_str, dur_str, lon, lat)
 
