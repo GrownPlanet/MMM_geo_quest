@@ -226,9 +226,9 @@ class GeoQuest:
         elif self.difficulty == "Medium":
             return points[::2]
         elif self.difficulty == "Hard":
-            return points[::3]
-        elif self.difficulty == "Expert":
             return points[::4]
+        elif self.difficulty == "Expert":
+            return points
         else:
             print("Warning: unrecognized difficulty level, defaulting to Easy")
             return points[::1]
