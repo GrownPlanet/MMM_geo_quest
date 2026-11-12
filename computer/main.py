@@ -2,11 +2,18 @@ import hashlib
 import math
 import os
 
-import customtkinter
-import requests
-from dotenv import load_dotenv
 from PIL import Image
+from dotenv import load_dotenv
 from pathlib import Path
+import customtkinter
+import paho.mqtt.client as mqtt
+import requests
+
+# MQTT
+BROKER = "public.mqttserver.eu"
+PORT = 1883
+OUT_TOPIC = "ugent/MMM/GeoQuest/computer"
+IN_TOPIC = "ugent/MMM/GeoQuest/arduino"
 
 # Belfort van Gent als centrum
 BELFORT_LAT = 51.0537
@@ -15,6 +22,7 @@ BELFORT_LON = 3.7250
 AREA_SIZE_KM = 3.0
 HALF_AREA_KM = AREA_SIZE_KM / 2
 
+# Mapbox
 load_dotenv()
 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
@@ -85,11 +93,33 @@ class GeoQuest:
         self.word: str | None = None
         self.destination: tuple[float, float] | None = None
 
+        # MQTT
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
+
+        self.client.connect(BROKER, PORT)
+        self.client.loop_start()
+
+        # UI
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
         self.app.geometry("600x400")
         
         self.create_start_screen()
+
+    def __del__(self):
+        self.client.loop_stop()
+        self.client.disconnect()
+
+    def on_connect(self, client, _userdata, _flags, _reason_code, _properties):
+        print("Connected to MQTT broker!")
+        client.subscribe(IN_TOPIC)
+
+    def on_message(self, client, userdata, msg):
+        message = msg.payload.decode()
+        print(f"Received on {msg.topic}: {message}")
 
     def create_start_screen(self) -> None:
         self.title_label = customtkinter.CTkLabel(
