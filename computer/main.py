@@ -1,13 +1,13 @@
 import hashlib
 import math
 import os
-
-from PIL import Image
-from dotenv import load_dotenv
 from pathlib import Path
+
 import customtkinter
 import paho.mqtt.client as mqtt
 import requests
+from dotenv import load_dotenv
+from PIL import Image
 
 # MQTT
 BROKER = "public.mqttserver.eu"
@@ -16,8 +16,8 @@ OUT_TOPIC = "ugent/MMM/GeoQuest/computer"
 IN_TOPIC = "ugent/MMM/GeoQuest/arduino"
 
 # Belfort van Gent als centrum
-BELFORT_LAT = 51.0537
 BELFORT_LON = 3.7250
+BELFORT_LAT = 51.0537
 
 AREA_SIZE_KM = 3.0
 HALF_AREA_KM = AREA_SIZE_KM / 2
@@ -91,7 +91,8 @@ def word_to_location(word: str) -> tuple[float, float]:
 class GeoQuest:
     def __init__(self) -> None:
         self.word: str | None = None
-        self.destination: tuple[float, float] | None = None
+        self.destination: tuple[float, float] = 0, 0
+        self.messages: list[str] = []
 
         # MQTT
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -119,6 +120,7 @@ class GeoQuest:
 
     def on_message(self, client, userdata, msg):
         message = msg.payload.decode()
+        self.messages.append(message)
         print(f"Info: Received on {msg.topic}: {message}")
 
     def create_start_screen(self) -> None:
@@ -186,17 +188,54 @@ class GeoQuest:
         print(f"Info: Starting game with word: {self.word}")
         print(f"Info: Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
 
-        dist_str, dur_str, points = get_route_points((BELFORT_LON, BELFORT_LAT), (lon, lat))
-        print("Debug: points on path", points)
+        self.location_screen()
 
-        self.create_game_screen(dist_str, dur_str, lon, lat)
 
-    def create_game_screen(self, dist: str, dur: str, lon: float, lat: float) -> None:
+    def location_screen(self):
         self.start_button.destroy()
         self.text_input.destroy()
         self.title_label.destroy()
         self.image_label.destroy()
         self.error_label.destroy()
+
+        self.wait_text = customtkinter.CTkLabel(
+            self.app,
+            text=f"Waiting on current location from arduino...",
+            font=("Arial", 18)
+        )
+        self.wait_text.place(relx=0.5, rely=0.5, anchor="center")
+
+        self.wait_for_location()
+
+    def wait_for_location(self):
+        got_location = False
+        curr_lon, curr_lat = 0, 0
+
+        for message in self.messages:
+            if message.startswith("LOC"):
+                got_location = True
+                curr_lon, curr_lat = message[len("LOC"):].split(',')
+                curr_lon = float(curr_lon)
+                curr_lat = float(curr_lat)
+
+            else:
+                print("Warning: unrecognized message, expected location:", message)
+        self.messages = []
+
+        if got_location:
+            dest_lon, dest_lat = self.destination
+            dist_str, dur_str, points = get_route_points((curr_lon, curr_lat), (dest_lon, dest_lat))
+            print("Debug: points on path", points)
+
+            self.create_game_screen(dist_str, dur_str)
+        else:
+            self.app.after(100, self.wait_for_location)
+
+    def create_game_screen(self, dist: str, dur: str) -> None:
+        self.wait_text.destroy()
+
+        lon, lat = self.destination
+
         self.start_text = customtkinter.CTkLabel(
             self.app,
             text=(
@@ -204,9 +243,9 @@ class GeoQuest:
                 f"Word: {self.word}\n"
                 f"Destination: {lon:.6f}, {lat:.6f}\n"
                 f"{dist}\n{dur}\n"
-                f"Check your Arduino!"
             ),
             font=("Arial", 18)
+
         )
 
         self.start_text.place(relx=0.5, rely=0.5, anchor="center")

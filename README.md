@@ -27,6 +27,20 @@
 
 - [ ] afgelegde weg tonen
 
+## Communicatie-schema
+
+De arduino en computer zullen via MQTT praten, de gebruikte server is `public.mqttserver.eu`. De arduino zal berichten sturen in `ugent/MMM/GeoQuest/arduino` en luisteren in `ugent/MMM/GeoQuest/computer` en vice versa.
+
+De berichten die de arduino kan sturen zijn als volgt:
+
+- `LOC(lon),(lat)`: de huidige locatie
+- `ARRIVED`: de arduino is op de locatie aangekomen
+
+De berichten die de computer kan sturen zijn als volgt:
+
+- `NEXT(lon),(lat)`: de volgende locatie
+- `LAST`: er zijn geen locaties meer
+
 ## Plan
 
 Kort stappenplan code:
