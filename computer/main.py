@@ -1,6 +1,8 @@
 import hashlib
 import math
 import os
+import queue
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import customtkinter
@@ -9,92 +11,119 @@ import requests
 from dotenv import load_dotenv
 from PIL import Image
 
+# --- Configuration ----------------------------------------------------------
+
+load_dotenv()
+MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/walking"
+REQUEST_TIMEOUT_S = 10
+
+BASE_DIR = Path(__file__).resolve().parent
+LOGO_PATH = BASE_DIR / "../media/logo.png"
+
 # MQTT
 BROKER = "public.mqttserver.eu"
 PORT = 1883
 OUT_TOPIC = "ugent/MMM/GeoQuest/computer"
 IN_TOPIC = "ugent/MMM/GeoQuest/arduino"
 
-# Belfort van Gent als centrum
+LOCATION_PREFIX = "LOC"
+POLL_INTERVAL_MS = 100
+
+# The Belfort of Ghent is the centre of the play area
 BELFORT_LON = 3.7250
 BELFORT_LAT = 51.0537
-
 AREA_SIZE_KM = 3.0
-HALF_AREA_KM = AREA_SIZE_KM / 2
+KM_PER_DEGREE_LAT = 111.32
 
-# Mapbox
-load_dotenv()
+Coordinate = tuple[float, float]  # (longitude, latitude)
 
-MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+# --- Geo helpers ------------------------------------------------------------
 
-BASE_DIR = Path(__file__).resolve().parent
+@dataclass
+class Route:
+    distance: str = "Distance: / km"
+    duration: str = "Duration: / minutes"
+    points: list[list[float]] = field(default_factory=list)
 
-def get_route_points(location: tuple[float, float], destination: tuple[float, float]) -> tuple[str, str, list[list[float]]]:
-    location_str = f"{location[0]},{location[1]}"
-    destination_str = f"{destination[0]},{destination[1]}"
 
-    data = requests.get(
-        f"https://api.mapbox.com/directions/v5/mapbox/walking/{location_str};{destination_str}",
-        params={
-            "access_token": MAPBOX_TOKEN,
-            "geometries": "geojson"
-        }
-    )
+def word_to_location(word: str) -> Coordinate:
+    """Hash a word and map it uniformly onto a square area centred on the Belfort.
 
-    directions = data.json()
-
-    if directions.get("code") != "Ok":
-        print("Error: Mapbox", directions)
-        return (
-            "Distance: / km",
-            "Duration: / minutes",
-            []
-        )
-
-    route = directions["routes"][0]
-
-    distance_km = route["distance"] / 1000
-    duration_min = route["duration"] / 60
-    route_points = route["geometry"]["coordinates"]
-
-    return (
-        f"Distance: {distance_km:.2f} km",
-        f"Duration: {duration_min:.0f} minutes",
-        route_points
-    )
-
-def word_to_location(word: str) -> tuple[float, float]:
-    """Hash the word and map it uniformly to a 3 km x 3 km square
-    centered approximately on the Belfort.
     Returns (longitude, latitude).
     """
     digest = hashlib.sha256(word.encode("utf-8")).digest()
 
-    # First half of the hash -> x coordinate
-    # Second half -> y coordinate
-    x_fraction = int.from_bytes(digest[:16], "big") / (2**128)
-    y_fraction = int.from_bytes(digest[16:32], "big") / (2**128)
+    # First half of the hash -> x fraction, second half -> y fraction
+    x_fraction = int.from_bytes(digest[:16], "big") / 2**128
+    y_fraction = int.from_bytes(digest[16:], "big") / 2**128
 
-    # Convert [0, 1] to [-1.5, +1.5] km
+    # Offsets in km, in [-AREA_SIZE_KM / 2, +AREA_SIZE_KM / 2]
     x_km = (x_fraction - 0.5) * AREA_SIZE_KM
     y_km = (y_fraction - 0.5) * AREA_SIZE_KM
 
-    # Convert km offsets to latitude/longitude
-    dlat = y_km / 111.32
-    dlon = x_km / (111.32 * math.cos(math.radians(BELFORT_LAT)))
+    km_per_degree_lon = KM_PER_DEGREE_LAT * math.cos(math.radians(BELFORT_LAT))
+    return (
+        BELFORT_LON + x_km / km_per_degree_lon,
+        BELFORT_LAT + y_km / KM_PER_DEGREE_LAT,
+    )
 
-    lat = BELFORT_LAT + dlat
-    lon = BELFORT_LON + dlon
+def get_route(origin: Coordinate, destination: Coordinate) -> Route:
+    """Ask Mapbox for a walking route. Returns an empty Route on failure."""
+    coordinates = f"{origin[0]},{origin[1]};{destination[0]},{destination[1]}"
 
-    return lon, lat
+    try:
+        response = requests.get(
+            f"{MAPBOX_DIRECTIONS_URL}/{coordinates}",
+            params={"access_token": MAPBOX_TOKEN, "geometries": "geojson"},
+            timeout=REQUEST_TIMEOUT_S,
+        )
+        directions = response.json()
+    except (requests.RequestException, ValueError) as error:
+        print("Error: Mapbox request failed:", error)
+        return Route()
+
+    if directions.get("code") != "Ok":
+        print("Error: Mapbox", directions)
+        return Route()
+
+    route = directions["routes"][0]
+    return Route(
+        distance=f"Distance: {route['distance'] / 1000:.2f} km",
+        duration=f"Duration: {route['duration'] / 60:.0f} minutes",
+        points=route["geometry"]["coordinates"],
+    )
+
+
+def parse_location(message: str) -> Coordinate | None:
+    """Parse a 'LOC<lon>,<lat>' message. Returns None if it is not one."""
+    if not message.startswith(LOCATION_PREFIX):
+        print(f"WARNING: expected location, got '{message}'")
+        return None
+
+    try:
+        lon, lat = message[len(LOCATION_PREFIX):].split(",")
+        return float(lon), float(lat)
+    except ValueError:
+        print(f"WARNING: malformed location: '{message}'")
+        return None
+
+
+# --- Application ------------------------------------------------------------
 
 class GeoQuest:
     def __init__(self) -> None:
         self.word: str | None = None
-        self.destination: tuple[float, float] = 0, 0
-        self.messages: list[str] = []
+        self.destination: Coordinate = (0, 0)
+        self.difficulty: str = "Easy"
 
-        # MQTT
+        self.messages: queue.Queue[str] = queue.Queue()
+
+        self._setup_mqtt()
+        self._setup_window()
+        self.create_start_screen()
+
+    def _setup_mqtt(self) -> None:
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
         self.client.on_connect = self.on_connect
@@ -103,24 +132,24 @@ class GeoQuest:
         self.client.connect(BROKER, PORT)
         self.client.loop_start()
 
-        # UI
+    def _setup_window(self) -> None:
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
         self.app.geometry("600x400")
-        
-        self.create_start_screen()
+        self.app.protocol("WM_DELETE_WINDOW", self.close)
 
-    def __del__(self):
+    def close(self) -> None:
         self.client.loop_stop()
         self.client.disconnect()
+        self.app.destroy()
 
-    def on_connect(self, client, _userdata, _flags, _reason_code, _properties):
+    def on_connect(self, client, _userdata, _flags, _reason_code, _properties) -> None:
         print("Info: Connected to MQTT broker!")
         client.subscribe(IN_TOPIC)
 
-    def on_message(self, client, userdata, msg):
+    def on_message(self, _client, _userdata, msg) -> None:
         message = msg.payload.decode()
-        self.messages.append(message)
+        self.messages.put(message)
         print(f"Info: Received on {msg.topic}: {message}")
 
     def create_start_screen(self) -> None:
@@ -141,20 +170,16 @@ class GeoQuest:
         )
 
         self.title_label = customtkinter.CTkLabel(
-            self.app,
-            text="Welcome to GeoQuest!",
-            font=("Arial", 24)
+            self.app, text="Welcome to GeoQuest!", font=("Arial", 24)
         )
-
         self.text_input = customtkinter.CTkEntry(
             self.app,
             placeholder_text="Enter a word",
             width=200,
             height=30,
             border_width=2,
-            corner_radius=10
+            corner_radius=10,
         )
-
         self.start_button = customtkinter.CTkButton(
             self.app,
             text="Start Game",
@@ -162,9 +187,8 @@ class GeoQuest:
             width=200,
             height=30,
             border_width=2,
-            corner_radius=10
+            corner_radius=10,
         )
-
         self.difficulty_menu = customtkinter.CTkOptionMenu(
             self.app,
             values=["Easy", "Medium", "Hard", "Expert"],
@@ -172,25 +196,16 @@ class GeoQuest:
             height=30,
             corner_radius=10
         )
-
         self.error_label = customtkinter.CTkLabel(
             self.app,
             text="Please enter a word to start the game.",
             font=("Arial", 14),
-            text_color="red"
+            text_color="red",
         )
 
-        self.image = customtkinter.CTkImage(
-            light_image=Image.open(BASE_DIR / "../media/logo.png"),
-            dark_image=Image.open(BASE_DIR / "../media/logo.png"),
-            size=(100, 100)
-        )
-
-        self.image_label = customtkinter.CTkLabel(
-            self.app,
-            image=self.image,
-            text=""
-        )
+        logo = Image.open(LOGO_PATH)
+        self.image = customtkinter.CTkImage(light_image=logo, dark_image=logo, size=(100, 100))
+        self.image_label = customtkinter.CTkLabel(self.app, image=self.image, text="")
 
         self.user_manual_button.place(relx=0.9, rely=0.9, anchor="center")
         self.title_label.place(relx=0.5, rely=0.2, anchor="center")
@@ -216,29 +231,29 @@ class GeoQuest:
 
         self.word = word
         self.destination = word_to_location(word)
-        self.difficulty = difficulty
-
         lon, lat = self.destination
 
-        print(f"Info: Starting game with word: {self.word}")
+        print(f"Info: Starting game with word: {word}")
         print(f"Info: Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
         print(f"Info: Difficulty level: {self.difficulty}")
 
-        self.location_screen()
+        self.create_location_screen()
 
-
-    def location_screen(self):
-        self.start_button.destroy()
-        self.text_input.destroy()
-        self.title_label.destroy()
-        self.image_label.destroy()
-        self.error_label.destroy()
-        self.difficulty_menu.destroy()
+    def create_location_screen(self) -> None:
+        for widget in (
+            self.start_button,
+            self.text_input,
+            self.title_label,
+            self.image_label,
+            self.difficulty_menu,
+            self.error_label,
+        ):
+            widget.destroy()
 
         self.wait_text = customtkinter.CTkLabel(
             self.app,
-            text=f"Waiting on current location from arduino...",
-            font=("Arial", 18)
+            text="Waiting on current location from arduino...",
+            font=("Arial", 18),
         )
         self.wait_text.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -257,48 +272,38 @@ class GeoQuest:
             print("Warning: unrecognized difficulty level, defaulting to Easy")
             return points[::1]
 
-    def wait_for_location(self):
-        got_location = False
-        curr_lon, curr_lat = 0, 0
+    def wait_for_location(self) -> None:
+        current_location = None
 
-        for message in self.messages:
-            if message.startswith("LOC"):
-                got_location = True
-                curr_lon, curr_lat = message[len("LOC"):].split(',')
-                curr_lon = float(curr_lon)
-                curr_lat = float(curr_lat)
+        while not self.messages.empty() and current_location is None:
+            message = self.messages.get_nowait()
+            current_location = parse_location(message)
 
-            else:
-                print("Warning: unrecognized message, expected location:", message)
-        self.messages = []
-
-        if got_location:
-            dest_lon, dest_lat = self.destination
-            dist_str, dur_str, points = get_route_points((curr_lon, curr_lat), (dest_lon, dest_lat))
-            print("Debug: points on path", points)
-
-            points = self.calculate_points_with_difficulty(points)
-            self.create_game_screen(dist_str, dur_str)
-        else:
+        if current_location is None:
             self.app.after(100, self.wait_for_location)
+            return
 
-    def create_game_screen(self, dist: str, dur: str) -> None:
+        route = get_route(current_location, self.destination)
+        print("Debug: points on path", route.points)
+        route.points = self.calculate_points_with_difficulty(route.points)
+        print("Debug: points on reduced path", route.points)
+
+        self.create_game_screen(route)
+
+    def create_game_screen(self, route: Route) -> None:
         self.wait_text.destroy()
 
         lon, lat = self.destination
-
         self.start_text = customtkinter.CTkLabel(
             self.app,
             text=(
-                f"Game started!\n"
+                "Game started!\n"
                 f"Word: {self.word}\n"
                 f"Destination: {lon:.6f}, {lat:.6f}\n"
-                f"{dist}\n{dur}\n"
+                f"{route.distance}\n{route.duration}\n"
             ),
-            font=("Arial", 18)
-
+            font=("Arial", 18),
         )
-
         self.start_text.place(relx=0.5, rely=0.5, anchor="center")
 
     def run(self) -> None:
@@ -306,5 +311,4 @@ class GeoQuest:
 
 
 if __name__ == "__main__":
-    game = GeoQuest()
-    game.run()
+    GeoQuest().run()
