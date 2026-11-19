@@ -22,9 +22,9 @@
 - [ ] MQTT server communicatie
   - [ ] huidige punt ophalen
   - [ ] aankomst aangeven
-- [ ] richting naar volgende punt
+- [x] richting naar volgende punt
 - [ ] aankomst detecteren
-- [ ] richting aangeven op display
+- [x] richting aangeven op display
 
 ### Extra (indien er tijd over is)
 
