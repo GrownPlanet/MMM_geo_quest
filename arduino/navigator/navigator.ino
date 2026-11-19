@@ -2,7 +2,7 @@
  * GeoQuest navigator
  *
  * - Ontvangt tussenpunt via Serial:  WP:<lat>,<lon>
- * - Leest eigen positie via GPS (elke ~3 s bearing herberekenen)
+ * - Leest eigen positie via GPS (bearing maximaal elke seconde herberekenen)
  * - Tussen GPS-updates: heading via BMI270/BMM150 (tilt-compensatie + smoothing)
  * - Toont relatieve pijl naar het doel op OLED
  */
@@ -20,13 +20,24 @@ Adafruit_GPS GPS(&GPSSerial);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 
 // --- Timing ---
-const unsigned long GPS_BEARING_INTERVAL_MS = 3000;
+const unsigned long GPS_BEARING_INTERVAL_MS = 1000;
 const unsigned long GPS_DATA_TIMEOUT_MS = 3500;
 const unsigned long DISPLAY_INTERVAL_MS = 200;
 const float ARRIVAL_RADIUS_M = 15.0f;
 const float HEADING_SMOOTH_ALPHA = 0.18f;  // lager = stabieler, trager
 // Draai heading zodat "vooruit" = pijl omhoog (pas aan per montage, bv. 90/180)
 const float HEADING_MOUNT_OFFSET_DEG = 0.0f;
+// Oostelijke magnetische declinatie is positief. Stel in voor de speelregio.
+const float MAGNETIC_DECLINATION_DEG = 0.0f;
+
+// Vul deze waarden in met de uitvoer van CAL/CALDONE en zet daarna op true.
+const bool MAG_CALIBRATION_CONFIGURED = false;
+const float MAG_OFFSET_X = 0.0f;
+const float MAG_OFFSET_Y = 0.0f;
+const float MAG_OFFSET_Z = 0.0f;
+const float MAG_SCALE_X = 1.0f;
+const float MAG_SCALE_Y = 1.0f;
+const float MAG_SCALE_Z = 1.0f;
 
 // --- Waypoint / GPS state ---
 bool haveTarget = false;
@@ -47,13 +58,21 @@ unsigned long lastBearingUpdateMs = 0;
 unsigned long lastDisplayMs = 0;
 
 // --- IMU / heading ---
-float headingDeg = 0.0f;          // 0..360, device forward vs magnetic north
+float headingDeg = 0.0f;          // 0..360, device forward vs true north
 bool haveHeading = false;
 
-// Ruwe hard-iron offsets (pas aan na korte kalibratie / ronddraaien)
-float magOffsetX = 0.0f;
-float magOffsetY = 0.0f;
-float magOffsetZ = 0.0f;
+float magOffsetX = MAG_OFFSET_X;
+float magOffsetY = MAG_OFFSET_Y;
+float magOffsetZ = MAG_OFFSET_Z;
+float magScaleX = MAG_SCALE_X;
+float magScaleY = MAG_SCALE_Y;
+float magScaleZ = MAG_SCALE_Z;
+bool haveMagCalibration = MAG_CALIBRATION_CONFIGURED;
+bool magCalibrationRunning = false;
+bool magCalibrationHasSample = false;
+unsigned long magCalibrationSamples = 0;
+float magMinX, magMinY, magMinZ;
+float magMaxX, magMaxY, magMaxZ;
 
 // Serial command buffer
 String serialLine;
@@ -116,6 +135,8 @@ void showBootMessage(const char *msg) {
 // Serial: waypoint ontvangen
 // Protocol:  WP:<lat>,<lon>     bv. WP:51.053700,3.725000
 // Optioneel: CLEAR              wis waypoint
+//           CAL                start magnetometerkalibratie
+//           CALDONE            stop en toon kalibratiewaarden
 // ---------------------------------------------------------------------------
 
 void handleSerialLine(String line) {
@@ -126,6 +147,54 @@ void handleSerialLine(String line) {
     haveTarget = false;
     haveBearing = false;
     Serial.println("OK CLEAR");
+    return;
+  }
+
+  if (line.equalsIgnoreCase("CAL")) {
+    magCalibrationRunning = true;
+    magCalibrationHasSample = false;
+    magCalibrationSamples = 0;
+    Serial.println("MAG CAL started: rotate the device in all orientations, then send CALDONE");
+    return;
+  }
+
+  if (line.equalsIgnoreCase("CALDONE")) {
+    if (!magCalibrationRunning) {
+      Serial.println("ERR MAG CAL not running");
+      return;
+    }
+    magCalibrationRunning = false;
+
+    if (magCalibrationSamples < 100 || !magCalibrationHasSample) {
+      Serial.println("ERR MAG CAL too few samples; send CAL and try again");
+      return;
+    }
+
+    const float rangeX = (magMaxX - magMinX) * 0.5f;
+    const float rangeY = (magMaxY - magMinY) * 0.5f;
+    const float rangeZ = (magMaxZ - magMinZ) * 0.5f;
+    if (rangeX < 5.0f || rangeY < 5.0f || rangeZ < 5.0f) {
+      Serial.println("ERR MAG CAL incomplete rotation; each axis range must be at least 10 uT");
+      return;
+    }
+
+    magOffsetX = (magMaxX + magMinX) * 0.5f;
+    magOffsetY = (magMaxY + magMinY) * 0.5f;
+    magOffsetZ = (magMaxZ + magMinZ) * 0.5f;
+    const float averageRange = (rangeX + rangeY + rangeZ) / 3.0f;
+    magScaleX = averageRange / rangeX;
+    magScaleY = averageRange / rangeY;
+    magScaleZ = averageRange / rangeZ;
+    haveMagCalibration = true;
+
+    Serial.println("MAG CAL values (copy to the constants in navigator.ino):");
+    Serial.print("MAG_OFFSET_X = "); Serial.println(magOffsetX, 4);
+    Serial.print("MAG_OFFSET_Y = "); Serial.println(magOffsetY, 4);
+    Serial.print("MAG_OFFSET_Z = "); Serial.println(magOffsetZ, 4);
+    Serial.print("MAG_SCALE_X = "); Serial.println(magScaleX, 4);
+    Serial.print("MAG_SCALE_Y = "); Serial.println(magScaleY, 4);
+    Serial.print("MAG_SCALE_Z = "); Serial.println(magScaleZ, 4);
+    Serial.println("Set MAG_CALIBRATION_CONFIGURED to true, then upload again to keep them after reboot.");
     return;
   }
 
@@ -239,9 +308,34 @@ void updateHeadingFromIMU() {
   IMU.readAcceleration(ax, ay, az);
   IMU.readMagneticField(mx, my, mz);
 
+  if (magCalibrationRunning) {
+    if (!magCalibrationHasSample) {
+      magMinX = magMaxX = mx;
+      magMinY = magMaxY = my;
+      magMinZ = magMaxZ = mz;
+      magCalibrationHasSample = true;
+    } else {
+      magMinX = min(magMinX, mx);
+      magMinY = min(magMinY, my);
+      magMinZ = min(magMinZ, mz);
+      magMaxX = max(magMaxX, mx);
+      magMaxY = max(magMaxY, my);
+      magMaxZ = max(magMaxZ, mz);
+    }
+    magCalibrationSamples++;
+    return;
+  }
+
+  if (!haveMagCalibration) {
+    return;
+  }
+
   mx -= magOffsetX;
   my -= magOffsetY;
   mz -= magOffsetZ;
+  mx *= magScaleX;
+  my *= magScaleY;
+  mz *= magScaleZ;
 
   // Roll / pitch uit accelerometer (rad)
   float roll = atan2(ay, az);
@@ -257,7 +351,9 @@ void updateHeadingFromIMU() {
   float myH = mx * sinR * sinP + my * cosR - mz * sinR * cosP;
 
   // Horizontaal: zelfde assen-idee als Bijlage_A (atan2(my, mx)), plus tilt
-  float rawHeading = wrap360(radToDeg(atan2(myH, mxH)) + HEADING_MOUNT_OFFSET_DEG);
+  float rawHeading = wrap360(radToDeg(atan2(myH, mxH)) +
+                             HEADING_MOUNT_OFFSET_DEG +
+                             MAGNETIC_DECLINATION_DEG);
 
   if (!haveHeading) {
     headingDeg = rawHeading;
@@ -318,6 +414,19 @@ void updateDisplay() {
     display.println("GPS: zoeken...");
     display.print("Doel ");
     display.print(targetLat, 4);
+    display.display();
+    return;
+  }
+
+  if (magCalibrationRunning) {
+    display.println("IMU kalibreren...");
+    display.display();
+    return;
+  }
+
+  if (!haveMagCalibration) {
+    display.println("IMU kalibreren");
+    display.println("Serial: CAL");
     display.display();
     return;
   }
@@ -398,6 +507,9 @@ void setup() {
   delay(800);
   Serial.println("READY");
   Serial.println("Send WP:<lat>,<lon>");
+  if (!haveMagCalibration) {
+    Serial.println("Magnetometer not calibrated. Send CAL, rotate in all orientations, then send CALDONE.");
+  }
 }
 
 void loop() {
