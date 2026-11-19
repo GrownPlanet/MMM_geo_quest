@@ -2,6 +2,7 @@ import hashlib
 import math
 import os
 import queue
+import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -218,9 +219,9 @@ class GeoQuest:
         self.image_label.place(relx=0.5, rely=0.8, anchor="center")
     
     def open_user_manual(self) -> None:
-        manual_path = BASE_DIR / "../user_manual.md"
+        manual_path = (BASE_DIR / "../user_manual.md").resolve()
         if manual_path.exists():
-            os.startfile(manual_path)
+            webbrowser.open(manual_path.as_uri())
         else:
             print("Error: User manual not found.")
 
