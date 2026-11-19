@@ -5,6 +5,13 @@
 - zet de `MAPBOX_TOKEN` in `.env`
 - installeer `requirements.txt`: `pip install -r requirements.txt`
 
+## Hoe uit te voeren
+
+- arduino: open het `.ino` bestand in [Arduino IDE](https://www.arduino.cc/en/software/) en stuur het door
+- python: run `python computer/main.py`
+- pathfinding server:
+  - clone en run [gpath](https://github.com/GrownPlanet/gpath), verdere instructies staan in de readme van dat project
+
 ## TODO's
 
 ### Computer
