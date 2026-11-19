@@ -266,9 +266,10 @@ class GeoQuest:
         if self.difficulty == "Easy":
             return points
         elif self.difficulty == "Medium":
-            return points[::2]
+            # make sure the last point is included
+            return points[:-1:2] + [points[-1]]
         elif self.difficulty == "Hard":
-            return points[::4]
+            return points[:-1:4] + [points[-1]]
         elif self.difficulty == "Expert":
             return [points[-1]]
         else:
