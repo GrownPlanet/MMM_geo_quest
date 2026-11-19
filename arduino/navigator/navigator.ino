@@ -27,17 +27,19 @@ const float ARRIVAL_RADIUS_M = 15.0f;
 const float HEADING_SMOOTH_ALPHA = 0.18f;  // lager = stabieler, trager
 // Draai heading zodat "vooruit" = pijl omhoog (pas aan per montage, bv. 90/180)
 const float HEADING_MOUNT_OFFSET_DEG = 0.0f;
+// Kompasheading hoort met de klok mee toe te nemen; keer de Y-as om voor deze sensororiëntatie.
+const bool HEADING_REVERSE_Y = true;
 // Oostelijke magnetische declinatie is positief. Stel in voor de speelregio.
 const float MAGNETIC_DECLINATION_DEG = 0.0f;
 
 // Vul deze waarden in met de uitvoer van CAL/CALDONE en zet daarna op true.
-const bool MAG_CALIBRATION_CONFIGURED = false;
-const float MAG_OFFSET_X = 0.0f;
-const float MAG_OFFSET_Y = 0.0f;
-const float MAG_OFFSET_Z = 0.0f;
-const float MAG_SCALE_X = 1.0f;
-const float MAG_SCALE_Y = 1.0f;
-const float MAG_SCALE_Z = 1.0f;
+const bool MAG_CALIBRATION_CONFIGURED = true;
+const float MAG_OFFSET_X = 60.0f;
+const float MAG_OFFSET_Y = -18.0f;
+const float MAG_OFFSET_Z = -42.0f;
+const float MAG_SCALE_X = 1.2796f;
+const float MAG_SCALE_Y = 0.8623f;
+const float MAG_SCALE_Z = 0.9444f;
 
 // --- Waypoint / GPS state ---
 bool haveTarget = false;
@@ -350,8 +352,9 @@ void updateHeadingFromIMU() {
   float mxH = mx * cosP + mz * sinP;
   float myH = mx * sinR * sinP + my * cosR - mz * sinR * cosP;
 
-  // Horizontaal: zelfde assen-idee als Bijlage_A (atan2(my, mx)), plus tilt
-  float rawHeading = wrap360(radToDeg(atan2(myH, mxH)) +
+  // Heading is clockwise-positive; de Y-as van deze sensororiëntatie heeft het tegengestelde teken.
+  float headingY = HEADING_REVERSE_Y ? -myH : myH;
+  float rawHeading = wrap360(radToDeg(atan2(headingY, mxH)) +
                              HEADING_MOUNT_OFFSET_DEG +
                              MAGNETIC_DECLINATION_DEG);
 
