@@ -30,16 +30,16 @@ const float HEADING_MOUNT_OFFSET_DEG = 0.0f;
 // Kompasheading hoort met de klok mee toe te nemen; keer de Y-as om voor deze sensororiëntatie.
 const bool HEADING_REVERSE_Y = true;
 // Oostelijke magnetische declinatie is positief. Stel in voor de speelregio.
-const float MAGNETIC_DECLINATION_DEG = 0.0f;
+const float MAGNETIC_DECLINATION_DEG = 2.44f;  // Centrum Gent, WMM-2025 (19-11-2026)
 
 // Vul deze waarden in met de uitvoer van CAL/CALDONE en zet daarna op true.
 const bool MAG_CALIBRATION_CONFIGURED = true;
-const float MAG_OFFSET_X = 60.0f;
-const float MAG_OFFSET_Y = -18.0f;
-const float MAG_OFFSET_Z = -42.0f;
-const float MAG_SCALE_X = 1.2796f;
-const float MAG_SCALE_Y = 0.8623f;
-const float MAG_SCALE_Z = 0.9444f;
+const float MAG_OFFSET_X = 56.5f;
+const float MAG_OFFSET_Y = -19.0f;
+const float MAG_OFFSET_Z = -41.5f;
+const float MAG_SCALE_X = 0.9597f;
+const float MAG_SCALE_Y = 1.0155f;
+const float MAG_SCALE_Z = 1.0275f;
 
 // --- Waypoint / GPS state ---
 bool haveTarget = false;
