@@ -23,7 +23,7 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 const unsigned long GPS_BEARING_INTERVAL_MS = 1000;
 const unsigned long GPS_DATA_TIMEOUT_MS = 3500;
 const unsigned long DISPLAY_INTERVAL_MS = 200;
-const float ARRIVAL_RADIUS_M = 15.0f;
+const float ARRIVAL_RADIUS_M = 7.5f;
 const float HEADING_SMOOTH_ALPHA = 0.18f;  // lager = stabieler, trager
 // Draai heading zodat "vooruit" = pijl omhoog (pas aan per montage, bv. 90/180)
 const float HEADING_MOUNT_OFFSET_DEG = 0.0f;
