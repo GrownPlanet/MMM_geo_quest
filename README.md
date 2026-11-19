@@ -21,8 +21,9 @@
 - [x] MQTT server communicatie
   - [x] initiële locatie opvragen
 - [x] difficulty vragen
-- [ ] main loop
+- [x] main loop
 - [ ] aantal punten in easy, medium, hard en expert bespreken
+- [ ] grondig testen
 
 ### Arduino
 
@@ -44,7 +45,6 @@ De arduino en computer zullen via MQTT praten, de gebruikte server is `public.mq
 De berichten die de arduino kan sturen zijn als volgt:
 
 - `LOC(lon),(lat)`: de huidige locatie
-- `ARRIVED`: de arduino is op de locatie aangekomen
 
 De berichten die de computer kan sturen zijn als volgt:
 

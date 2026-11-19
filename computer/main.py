@@ -40,7 +40,11 @@ BELFORT_LAT = 51.0537
 AREA_SIZE_KM = 3.0
 KM_PER_DEGREE_LAT = 111.32
 
-Coordinate = tuple[float, float]  # (longitude, latitude)
+MIN_DIST_M = 15
+
+Point = tuple[float, float]  # (longitude, latitude)
+def point_from_list(pos: list[float]) -> Point:
+    return (pos[0], pos[1])
 
 # --- Geo helpers ------------------------------------------------------------
 
@@ -50,8 +54,7 @@ class Route:
     duration: str = "Duration: / minutes"
     points: list[list[float]] = field(default_factory=list)
 
-
-def word_to_location(word: str) -> Coordinate:
+def word_to_location(word: str) -> Point:
     """Hash a word and map it uniformly onto a square area centred on the Belfort.
 
     Returns (longitude, latitude).
@@ -72,7 +75,7 @@ def word_to_location(word: str) -> Coordinate:
         BELFORT_LAT + y_km / KM_PER_DEGREE_LAT,
     )
 
-def get_route(origin: Coordinate, destination: Coordinate) -> Route:
+def get_route(origin: Point, destination: Point) -> Route:
     """Ask Mapbox for a walking route. Returns an empty Route on failure."""
     coordinates = f"{origin[0]},{origin[1]};{destination[0]},{destination[1]}"
 
@@ -99,7 +102,7 @@ def get_route(origin: Coordinate, destination: Coordinate) -> Route:
     )
 
 
-def parse_location(message: str) -> Coordinate | None:
+def parse_location(message: str) -> Point | None:
     """Parse a 'LOC<lon>,<lat>' message. Returns None if it is not one."""
     if not message.startswith(LOCATION_PREFIX):
         print(f"WARNING: expected location, got '{message}'")
@@ -112,14 +115,25 @@ def parse_location(message: str) -> Coordinate | None:
         print(f"WARNING: malformed location: '{message}'")
         return None
 
+def haversine_distance(a: Point, b: Point) -> float:
+    r = 6371000
+    rad = math.pi / 180
+    p1, p2 = a[1]*rad, b[1]*rad
+    dp, dl = (b[1]-a[1])*rad, (b[1]-a[1])*rad
+    h = math.sin(dp/2)*math.sin(dp/2) \
+        + math.cos(p1)*math.cos(p2)*math.sin(dl/2)*math.sin(dl/2)
+    return 2 * r * math.asin(math.sqrt(h))
 
 # --- Application ------------------------------------------------------------
 
 class GeoQuest:
-    def __init__(self) -> None:
+    def __init__(self):
         self.word: str | None = None
-        self.destination: Coordinate = (0, 0)
+        self.destination: Point = (0, 0)
         self.difficulty: str = "Easy"
+
+        self.route: Route = Route(distance=f"/", duration=f"/", points=[])
+        self.current_dest: Point = (0, 0)
 
         self.messages: queue.Queue[str] = queue.Queue()
 
@@ -127,7 +141,7 @@ class GeoQuest:
         self._setup_window()
         self.create_start_screen()
 
-    def _setup_mqtt(self) -> None:
+    def _setup_mqtt(self):
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
         self.client.on_connect = self.on_connect
@@ -136,27 +150,27 @@ class GeoQuest:
         self.client.connect(BROKER, PORT)
         self.client.loop_start()
 
-    def _setup_window(self) -> None:
+    def _setup_window(self):
         self.app = customtkinter.CTk()
         self.app.title("GeoQuest")
         self.app.geometry("600x400")
         self.app.protocol("WM_DELETE_WINDOW", self.close)
 
-    def close(self) -> None:
+    def close(self):
         self.client.loop_stop()
         self.client.disconnect()
         self.app.destroy()
 
-    def on_connect(self, client, _userdata, _flags, _reason_code, _properties) -> None:
+    def on_connect(self, client, _userdata, _flags, _reason_code, _properties):
         print("Info: Connected to MQTT broker!")
         client.subscribe(IN_TOPIC)
 
-    def on_message(self, _client, _userdata, msg) -> None:
+    def on_message(self, _client, _userdata, msg):
         message = msg.payload.decode()
         self.messages.put(message)
         print(f"Info: Received on {msg.topic}: {message}")
 
-    def create_start_screen(self) -> None:
+    def create_start_screen(self):
         self.user_manual_pictogram = customtkinter.CTkImage(
             light_image=Image.open(BASE_DIR / "../media/user_manual_black.png"),
             dark_image=Image.open(BASE_DIR / "../media/user_manual_white.png"),
@@ -218,14 +232,14 @@ class GeoQuest:
         self.start_button.place(relx=0.5, rely=0.6, anchor="center")
         self.image_label.place(relx=0.5, rely=0.8, anchor="center")
     
-    def open_user_manual(self) -> None:
+    def open_user_manual(self):
         manual_path = (BASE_DIR / "../user_manual.md").resolve()
         if manual_path.exists():
             webbrowser.open(manual_path.as_uri())
         else:
             print("Error: User manual not found.")
 
-    def start_game(self) -> None:
+    def start_game(self):
         word = self.text_input.get()
         self.difficulty = self.difficulty_menu.get()
 
@@ -238,12 +252,12 @@ class GeoQuest:
         lon, lat = self.destination
 
         print(f"Info: Starting game with word: {word}")
-        print(f"Info: Hashed location (lon, lat): {lon:.6f}, {lat:.6f}")
+        print(f"Info: Hashed location (lon, lat): {lon}, {lat}")
         print(f"Info: Difficulty level: {self.difficulty}")
 
         self.create_location_screen()
 
-    def create_location_screen(self) -> None:
+    def create_location_screen(self):
         for widget in (
             self.start_button,
             self.text_input,
@@ -261,7 +275,7 @@ class GeoQuest:
         )
         self.wait_text.place(relx=0.5, rely=0.5, anchor="center")
 
-        self.wait_for_location()
+        self.wait_for_initial_location()
 
     def calculate_points_with_difficulty(self, points: list[list[float]]) -> list[list[float]]:
         if self.difficulty == "Easy":
@@ -277,25 +291,40 @@ class GeoQuest:
             print("Warning: unrecognized difficulty level, defaulting to Easy")
             return points
 
-    def wait_for_location(self) -> None:
+    def set_next_location(self):
+        self.current_dest = point_from_list(self.route.points.pop(0))
+        self.client.publish(
+            OUT_TOPIC,
+            f"NEXT{self.current_dest[0]},{self.current_dest[1]}"
+        )
+        print(f"Info: next location: {self.current_dest}")
+
+    def get_location(self) -> Point | None:
         current_location = None
 
-        while not self.messages.empty() and current_location is None:
+        try:
             message = self.messages.get_nowait()
-            current_location = parse_location(message)
+        except queue.Empty:
+            return None
 
-        if current_location is None:
-            self.app.after(100, self.wait_for_location)
+        return parse_location(message)
+
+    def wait_for_initial_location(self):
+        initial_location = self.get_location()
+        if initial_location == None:
+            self.app.after(100, self.wait_for_initial_location)
             return
 
-        route = get_route(current_location, self.destination)
-        print("Debug: points on path", route.points)
-        route.points = self.calculate_points_with_difficulty(route.points)
-        print("Debug: points on reduced path", route.points)
+        print(f"Info: initial location: {initial_location}")
 
-        self.create_game_screen(route)
+        self.route = get_route(initial_location, self.destination)
+        # print("Debug: points on path", route.points)
+        self.route.points = self.calculate_points_with_difficulty(self.route.points)
+        # print("Debug: points on reduced path", route.points)
 
-    def create_game_screen(self, route: Route) -> None:
+        self.create_game_screen()
+
+    def create_game_screen(self):
         self.wait_text.destroy()
 
         lon, lat = self.destination
@@ -303,15 +332,48 @@ class GeoQuest:
             self.app,
             text=(
                 "Game started!\n"
+                "Check your arduino.\n"
                 f"Word: {self.word}\n"
-                f"Destination: {lon:.6f}, {lat:.6f}\n"
-                f"{route.distance}\n{route.duration}\n"
             ),
             font=("Arial", 18),
         )
         self.start_text.place(relx=0.5, rely=0.5, anchor="center")
 
-    def run(self) -> None:
+        self.set_next_location()
+
+        self.main_game_loop()
+
+    def main_game_loop(self):
+        current_location = self.get_location()
+        if current_location == None:
+            self.app.after(100, self.main_game_loop)
+            return
+
+        dist = haversine_distance(current_location, self.current_dest)
+        print(f"Info: new location: {current_location}; dist: {dist}")
+
+        if dist < MIN_DIST_M:
+            if len(self.route.points) == 0:
+                self.arrived()
+                return
+
+            self.set_next_location()
+
+        self.app.after(100, self.main_game_loop)
+
+    def arrived(self):
+        self.client.publish(OUT_TOPIC, "LAST")
+
+        self.start_text.destroy()
+
+        self.finished = customtkinter.CTkLabel(
+            self.app,
+            text="You did it! 🎉🎉",
+            font=("Arial", 18),
+        )
+        self.finished.place(relx=0.5, rely=0.5, anchor="center")
+
+    def run(self):
         self.app.mainloop()
 
 
