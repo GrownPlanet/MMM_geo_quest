@@ -15,7 +15,10 @@ from PIL import Image
 
 load_dotenv()
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
-MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/walking"
+# Use the mapbox api
+# MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/walking"
+# Or our own server
+MAPBOX_DIRECTIONS_URL = "http://localhost:8080/"
 REQUEST_TIMEOUT_S = 10
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -91,7 +94,7 @@ def get_route(origin: Coordinate, destination: Coordinate) -> Route:
     return Route(
         distance=f"Distance: {route['distance'] / 1000:.2f} km",
         duration=f"Duration: {route['duration'] / 60:.0f} minutes",
-        points=route["geometry"]["coordinates"] + [destination],
+        points=route["geometry"]["coordinates"] + [[destination[0], destination[1]]],
     )
 
 
