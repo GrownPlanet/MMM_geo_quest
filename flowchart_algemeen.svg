@@ -36,7 +36,7 @@
     </style>
   </defs>
 
-  <rect width="1500" height="2350" fill="#f8fafc"/>
+  <rect width="1500" height="2350" fill="#ffffff"/>
   <text x="750" y="58" class="title" text-anchor="middle">GeoQuest - spelverloop</text>
 
   <g aria-label="Legenda">

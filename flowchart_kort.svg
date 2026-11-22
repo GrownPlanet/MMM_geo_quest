@@ -22,7 +22,7 @@
     </style>
   </defs>
 
-  <rect width="1920" height="1080" fill="#f8fafc"/>
+  <rect width="1920" height="1080" fill="#ffffff"/>
   <text x="960" y="100" class="title" text-anchor="middle">GeoQuest - spelverloop in het kort</text>
 
   <rect x="255" y="150" width="150" height="65" rx="32" class="start-end"/>
