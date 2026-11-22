@@ -107,13 +107,14 @@
   <path d="M750 1660 V1690" class="line"/>
 
   <polygon points="750,1690 875,1760 750,1830 625,1760" class="decision-shape"/>
-  <text x="750" y="1755" class="decision dark-text">
-    <tspan x="750">Huidige positie binnen 5 m</tspan>
-    <tspan x="750" dy="23">afstand van tussenpunt?</tspan>
+  <text x="750" y="1738" class="decision dark-text">
+    <tspan x="750">Huidige positie</tspan>
+    <tspan x="750" dy="20">binnen 15 m afstand</tspan>
+    <tspan x="750" dy="20">van tussenpunt?</tspan>
   </text>
   <text x="894" y="1755" class="edge-label">Nee</text>
-  <path d="M875 1760 H1320 V1290 H1030" class="loop-line"/>
-  <text x="1115" y="1738" class="small">Verder navigeren</text>
+  <path d="M875 1760 H1080 V1290 H1030" class="loop-line"/>
+  <text x="1098" y="1500" class="small">Verder navigeren</text>
 
   <text x="774" y="1855" class="edge-label">Ja</text>
   <path d="M750 1830 V1860" class="line"/>
@@ -124,8 +125,8 @@
   </text>
 
   <text x="595" y="1925" class="edge-label">Nee</text>
-  <path d="M625 1930 H130 V1130 H470" class="loop-line"/>
-  <text x="145" y="1908" class="small">Volgend tussenpunt</text>
+  <path d="M625 1930 H420 V1130 H470" class="loop-line"/>
+  <text x="280" y="1510" class="small">Volgend tussenpunt</text>
 
   <text x="774" y="2024" class="edge-label">Ja</text>
   <path d="M750 2000 V2040" class="line"/>
