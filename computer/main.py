@@ -119,7 +119,7 @@ def haversine_distance(a: Point, b: Point) -> float:
     r = 6371000
     rad = math.pi / 180
     p1, p2 = a[1]*rad, b[1]*rad
-    dp, dl = (b[1]-a[1])*rad, (b[1]-a[1])*rad
+    dp, dl = (b[1]-a[1])*rad, (b[0]-a[0])*rad
     h = math.sin(dp/2)*math.sin(dp/2) \
         + math.cos(p1)*math.cos(p2)*math.sin(dl/2)*math.sin(dl/2)
     return 2 * r * math.asin(math.sqrt(h))
