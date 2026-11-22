@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 2350" role="img" aria-labelledby="title description">
+  <title id="title">GeoQuest - spelverloop</title>
+  <desc id="description">Flowchart van het GeoQuest-spelverloop.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L11,6 L1,11 Z" fill="#334155"/>
+    </marker>
+    <marker id="planned-arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L11,6 L1,11 Z" fill="#c96e70"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172033; }
+      .title { font-size: 34px; font-weight: 700; }
+      .legend { font-size: 15px; font-weight: 600; }
+      .node-title { font-size: 20px; font-weight: 700; }
+      .node-copy { font-size: 16px; fill: #334155; }
+      .small { font-size: 14px; fill: #526176; }
+      .decision { font-size: 17px; font-weight: 700; text-anchor: middle; }
+      .edge-label { font-size: 15px; font-weight: 700; fill: #334155; }
+      .line { fill: none; stroke: #334155; stroke-width: 3; marker-end: url(#arrow); }
+      .planned-line { fill: none; stroke: #c96e70; stroke-width: 4; stroke-dasharray: 10 7; marker-end: url(#planned-arrow); }
+      .loop-line { fill: none; stroke: #334155; stroke-width: 3; marker-end: url(#arrow); }
+      .card { stroke-width: 2; rx: 18; }
+      .computer-ui { fill: #dbe9f5; stroke: #7894b2; }
+      .computer-logic { fill: #5579a8; stroke: #3c5e88; }
+      .arduino-ui { fill: #e0eedf; stroke: #86a987; }
+      .arduino-logic { fill: #4e795e; stroke: #385f46; }
+      .mqtt { fill: #c96e70; stroke: #a64e52; }
+      .dark-text { fill: #fff !important; }
+      .planned-outline { fill: none; stroke-width: 4; stroke-dasharray: 9 6; rx: 18; }
+      .outline-red { stroke: #c96e70; }
+      .outline-blue { stroke: #dbe9f5; }
+      .decision-shape { fill: #5579a8; stroke: #3c5e88; stroke-width: 2.5; }
+      .pill { fill: #334155; }
+      .pill-text { fill: #fff; font-size: 17px; font-weight: 700; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1500" height="2350" fill="#f8fafc"/>
+  <text x="750" y="58" class="title" text-anchor="middle">GeoQuest - spelverloop</text>
+
+  <g aria-label="Legenda">
+    <rect x="70" y="110" width="250" height="48" rx="12" class="computer-ui card"/>
+    <text x="195" y="140" class="legend" text-anchor="middle">(1) Front-end computer</text>
+    <rect x="350" y="110" width="250" height="48" rx="12" class="computer-logic card"/>
+    <text x="475" y="140" class="legend dark-text" text-anchor="middle">(2) Back-end computer</text>
+    <rect x="630" y="110" width="250" height="48" rx="12" class="arduino-ui card"/>
+    <text x="755" y="140" class="legend" text-anchor="middle">(3) Front-end Arduino</text>
+    <rect x="910" y="110" width="250" height="48" rx="12" class="arduino-logic card"/>
+    <text x="1035" y="140" class="legend dark-text" text-anchor="middle">(4) Back-end Arduino</text>
+    <rect x="1190" y="110" width="240" height="48" rx="12" class="mqtt card"/>
+    <text x="1310" y="140" class="legend dark-text" text-anchor="middle">(5) MQTT-broker</text>
+  </g>
+  <rect x="75" y="180" width="42" height="22" rx="5" fill="none" stroke="#c96e70" stroke-width="4" stroke-dasharray="9 6"/>
+  <rect x="80" y="185" width="32" height="12" rx="3" fill="#c96e70"/>
+  <text x="132" y="197" class="small">Stippellijn rand = nog niet geïmplementeerd</text>
+
+  <rect x="650" y="220" width="200" height="52" rx="26" class="pill"/>
+  <text x="750" y="253" class="pill-text">START</text>
+  <path d="M750 272 V300" class="line"/>
+
+  <rect x="470" y="300" width="560" height="100" class="card computer-ui"/>
+  <text x="750" y="360" class="node-title" text-anchor="middle">Startscherm: woord + moeilijkheid invoeren</text>
+  <path d="M750 400 V430" class="line"/>
+
+  <rect x="470" y="430" width="560" height="120" class="card computer-logic"/>
+  <text x="750" y="476" class="node-title dark-text" text-anchor="middle">Eindpunt berekenen</text>
+  <text x="750" y="513" class="node-copy dark-text" text-anchor="middle">Woord hashen naar eindcoördinaten</text>
+  <path d="M750 550 V580" class="line"/>
+
+  <rect x="470" y="580" width="560" height="100" class="card arduino-logic"/>
+  <text x="750" y="640" class="node-title dark-text" text-anchor="middle">Huidige positie uitlezen</text>
+  <path d="M750 680 V710" class="planned-line"/>
+
+  <rect x="470" y="710" width="560" height="160" class="planned-outline outline-red"/>
+  <rect x="475" y="715" width="550" height="150" class="card mqtt"/>
+  <text x="750" y="751" class="node-title dark-text" text-anchor="middle">Huidige positie als startpunt</text>
+  <text x="750" y="790" class="node-copy dark-text" text-anchor="middle">Arduino publiceert positie naar MQTT (4 → 5)</text>
+  <text x="750" y="824" class="node-copy dark-text" text-anchor="middle">Computer haalt positie op van MQTT (5 → 2)</text>
+  <path d="M750 870 V900" class="line"/>
+
+  <rect x="470" y="900" width="560" height="120" class="card computer-logic"/>
+  <text x="750" y="946" class="node-title dark-text" text-anchor="middle">Route berekenen</text>
+  <text x="750" y="983" class="node-copy dark-text" text-anchor="middle">Tussenpunten ophalen + op moeilijkheid filteren</text>
+  <path d="M750 1020 V1050" class="line"/>
+
+  <rect x="470" y="1050" width="560" height="160" class="planned-outline outline-red"/>
+  <rect x="475" y="1055" width="550" height="150" class="card mqtt"/>
+  <text x="750" y="1091" class="node-title dark-text" text-anchor="middle">Volgende tussenpunt versturen</text>
+  <text x="750" y="1130" class="node-copy dark-text" text-anchor="middle">Computer publiceert tussenpunt naar MQTT (2 → 5)</text>
+  <text x="750" y="1164" class="node-copy dark-text" text-anchor="middle">Arduino haalt tussenpunt op van MQTT (5 → 4)</text>
+  <path d="M750 1210 V1240" class="line"/>
+
+  <rect x="470" y="1240" width="560" height="100" class="card arduino-logic"/>
+  <text x="750" y="1300" class="node-title dark-text" text-anchor="middle">Afstand en richting bepalen</text>
+  <path d="M750 1340 V1370" class="line"/>
+
+  <rect x="470" y="1370" width="560" height="100" class="card arduino-ui"/>
+  <text x="750" y="1430" class="node-title" text-anchor="middle">Afstand + richtingspijl tonen op OLED</text>
+  <path d="M750 1470 V1500" class="planned-line"/>
+
+  <rect x="470" y="1500" width="560" height="160" class="planned-outline outline-red"/>
+  <rect x="475" y="1505" width="550" height="150" class="card mqtt"/>
+  <text x="750" y="1541" class="node-title dark-text" text-anchor="middle">Huidige positie updaten</text>
+  <text x="750" y="1580" class="node-copy dark-text" text-anchor="middle">Arduino publiceert positie naar MQTT (4 → 5)</text>
+  <text x="750" y="1614" class="node-copy dark-text" text-anchor="middle">Computer haalt positie op van MQTT (5 → 2)</text>
+  <path d="M750 1660 V1690" class="line"/>
+
+  <polygon points="750,1690 875,1760 750,1830 625,1760" class="decision-shape"/>
+  <text x="750" y="1755" class="decision dark-text">
+    <tspan x="750">Huidige positie binnen 5 m</tspan>
+    <tspan x="750" dy="23">afstand van tussenpunt?</tspan>
+  </text>
+  <text x="894" y="1755" class="edge-label">Nee</text>
+  <path d="M875 1760 H1320 V1290 H1030" class="loop-line"/>
+  <text x="1115" y="1738" class="small">Verder navigeren</text>
+
+  <text x="774" y="1855" class="edge-label">Ja</text>
+  <path d="M750 1830 V1860" class="line"/>
+  <polygon points="750,1860 875,1930 750,2000 625,1930" class="decision-shape"/>
+  <text x="750" y="1925" class="decision dark-text">
+    <tspan x="750">Bereikt tussenpunt</tspan>
+    <tspan x="750" dy="23">= eindpunt?</tspan>
+  </text>
+
+  <text x="595" y="1925" class="edge-label">Nee</text>
+  <path d="M625 1930 H130 V1130 H470" class="loop-line"/>
+  <text x="145" y="1908" class="small">Volgend tussenpunt</text>
+
+  <text x="774" y="2024" class="edge-label">Ja</text>
+  <path d="M750 2000 V2040" class="line"/>
+  <rect x="470" y="2040" width="560" height="120" class="planned-outline outline-blue"/>
+  <rect x="475" y="2045" width="550" height="110" class="card computer-ui"/>
+  <text x="750" y="2110" class="node-title" text-anchor="middle">Quest voltooid: score + routekaart weergeven</text>
+  <path d="M750 2160 V2200" class="line"/>
+
+  <rect x="675" y="2200" width="150" height="52" rx="26" class="pill"/>
+  <text x="750" y="2233" class="pill-text">EINDE</text>
+</svg>

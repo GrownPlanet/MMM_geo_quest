@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title description">
+  <title id="title">GeoQuest - spelverloop in het kort</title>
+  <desc id="description">Een korte, op de speler gerichte weergave van het GeoQuest-spelverloop.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L11,6 L1,11 Z" fill="#435466"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #243447; }
+      .title { font-size: 44px; font-weight: 700; }
+      .node-title { font-size: 31px; font-weight: 700; }
+      .node-copy { font-size: 25px; fill: #435466; }
+      .decision { font-size: 27px; font-weight: 700; text-anchor: middle; }
+      .edge-label { font-size: 24px; font-weight: 700; fill: #435466; }
+      .arrow { fill: none; stroke: #435466; stroke-width: 4; marker-end: url(#arrow); }
+      .start-end { fill: #e8eff7; stroke: #8299b2; stroke-width: 3; }
+      .player-step { fill: #e4f0e2; stroke: #84a47f; stroke-width: 3; }
+      .game-step { fill: #e4f0e2; stroke: #84a47f; stroke-width: 3; }
+      .decision-shape { fill: #fff1d8; stroke: #c4a15f; stroke-width: 3; }
+      .finish { fill: #e4f0e2; stroke: #84a47f; stroke-width: 3; }
+      .small { font-size: 21px; fill: #5b6b7b; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1080" fill="#f8fafc"/>
+  <text x="960" y="100" class="title" text-anchor="middle">GeoQuest - spelverloop in het kort</text>
+
+  <rect x="255" y="150" width="150" height="65" rx="32" class="start-end"/>
+  <text x="330" y="192" class="node-title" text-anchor="middle">START</text>
+  <path d="M330 215 V270" class="arrow"/>
+
+  <rect x="80" y="270" width="500" height="330" rx="22" class="game-step"/>
+  <text x="330" y="360" class="node-title" text-anchor="middle">Bestemming en route</text>
+  <text x="330" y="425" class="node-copy" text-anchor="middle">
+    <tspan x="330">• Kies een woord en moeilijkheidsgraad</tspan>
+    <tspan x="330" dy="48">• GeoQuest berekent de bestemming</tspan>
+    <tspan x="330" dy="36">  en wandelroute</tspan>
+  </text>
+  <path d="M580 435 H660" class="arrow"/>
+
+  <rect x="660" y="270" width="450" height="320" rx="22" class="player-step"/>
+  <text x="885" y="370" class="node-title" text-anchor="middle">Navigeer naar tussenpunt</text>
+  <text x="885" y="430" class="node-copy" text-anchor="middle">
+    <tspan x="885">Volg de pijl op de Arduino</tspan>
+    <tspan x="885" dy="38">naar het volgende punt</tspan>
+  </text>
+  <path d="M1110 430 H1220" class="arrow"/>
+
+  <polygon points="1340,310 1460,430 1340,550 1220,430" class="decision-shape"/>
+  <text x="1340" y="410" class="decision">
+    <tspan x="1340">Is de</tspan>
+    <tspan x="1340" dy="34">eindbestemming</tspan>
+    <tspan x="1340" dy="34">bereikt?</tspan>
+  </text>
+  <text x="1510" y="395" class="edge-label">Ja</text>
+  <path d="M1460 430 H1570" class="arrow"/>
+
+  <rect x="1570" y="270" width="300" height="320" rx="22" class="finish"/>
+  <text x="1720" y="370" class="node-title" text-anchor="middle">Quest voltooid</text>
+  <text x="1720" y="430" class="node-copy" text-anchor="middle">
+    <tspan x="1720">Bekijk je score</tspan>
+    <tspan x="1720" dy="34">en routekaart</tspan>
+  </text>
+  <path d="M1720 590 V680" class="arrow"/>
+
+  <rect x="1645" y="680" width="150" height="70" rx="35" class="start-end"/>
+  <text x="1720" y="725" class="node-title" text-anchor="middle">EINDE</text>
+
+  <text x="1365" y="575" class="edge-label">Nee</text>
+  <path d="M1340 550 V775 H885 V590" class="arrow"/>
+  <text x="1030" y="755" class="small">Verder navigeren</text>
+</svg>

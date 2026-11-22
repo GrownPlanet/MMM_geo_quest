@@ -1,5 +1,13 @@
 # MMM GeoQuest
 
+## Spelverloop in het kort
+
+![GeoQuest-spelverloop-in-het-kort](flowchart_kort.svg)
+
+## Technische flowchart
+
+![GeoQuest-technische-flowchart](flowchart_algemeen.svg)
+
 ## Setup
 
 - zet de `MAPBOX_TOKEN` in `.env`
@@ -62,8 +70,8 @@ Kort stappenplan code:
 5. moeilijkheid selecteren [x]
 6. aantal kruispunten op basis van moeilijkheid [x]
 7. volgende punt wordt aan arduino gegeven
-8. richting bepalen en weergeven
-   - door middel van gps en IMU
+8. richting bepalen en weergeven [x]
+   - door middel van gps en IMU [x]
 9. aan punt gearriveerd? -> naar stap 7
 10. aan laatste punt? /Geslaagd!/ score (tijd?) weergeven.
 
