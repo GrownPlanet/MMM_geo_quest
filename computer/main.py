@@ -318,6 +318,8 @@ class GeoQuest:
         print(f"Info: initial location: {initial_location}")
 
         self.route = get_route(initial_location, self.destination)
+        print(f"Info: {self.route.distance}")
+        print(f"Info: {self.route.duration}")
         # print("Debug: points on path", route.points)
         self.route.points = self.calculate_points_with_difficulty(self.route.points)
         # print("Debug: points on reduced path", route.points)
