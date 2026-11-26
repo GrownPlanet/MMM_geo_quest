@@ -1,6 +1,18 @@
+import hashlib
+import math
 from dataclasses import dataclass, field
 
-from config import *
+import requests
+from config import (
+    AREA_SIZE_KM,
+    BELFORT_LAT,
+    BELFORT_LON,
+    KM_PER_DEGREE_LAT,
+    LOCATION_PREFIX,
+    MAPBOX_DIRECTIONS_URL,
+    MAPBOX_TOKEN,
+    REQUEST_TIMEOUT_S,
+)
 
 Point = tuple[float, float]  # (longitude, latitude)
 def point_from_list(pos: list[float]) -> Point:

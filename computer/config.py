@@ -1,6 +1,7 @@
-from dotenv import load_dotenv
-from pathlib import Path
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 load_dotenv()
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
