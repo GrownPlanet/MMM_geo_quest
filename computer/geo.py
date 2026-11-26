@@ -22,6 +22,7 @@ def point_from_list(pos: list[float]) -> Point:
 class Route:
     distance: str = "Distance: / km"
     duration: str = "Duration: / minutes"
+    duration_seconds: float = 0
     points: list[list[float]] = field(default_factory=list)
 
 def word_to_location(word: str) -> Point:
@@ -68,6 +69,7 @@ def get_route(origin: Point, destination: Point) -> Route:
     return Route(
         distance=f"Distance: {route['distance'] / 1000:.2f} km",
         duration=f"Duration: {route['duration'] / 60:.0f} minutes",
+        duration_seconds=route['duration'],
         points=route["geometry"]["coordinates"] + [[destination[0], destination[1]]],
     )
 
