@@ -26,8 +26,8 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 
 // ESP8266 AT-module is connected to Serial1 (D0=RX, D1=TX).
 const unsigned long ESP8266_BAUD = 115200;
-const char WIFI_SSID[] = "123test";
-const char WIFI_PASSWORD[] = "12345test";
+const char WIFI_SSID[] = WIFI NAME;
+const char WIFI_PASSWORD[] = WIFI PASSWORD;
 const char MQTT_BROKER[] = "public.mqttserver.eu";
 const uint16_t MQTT_PORT = 1883;
 const char MQTT_OUT_TOPIC[] = "ugent/MMM/GeoQuest/arduino";
