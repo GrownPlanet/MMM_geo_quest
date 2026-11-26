@@ -1,3 +1,4 @@
+import math
 import time
 import webbrowser
 from pathlib import Path
@@ -25,10 +26,11 @@ class GeoQuest:
         self.destination: Point = (0, 0)
         self.difficulty: str = "Easy"
 
-        self.route: Route = Route(distance="/", duration="/", points=[])
+        self.route: Route = Route(distance_str="/", duration_str="/", points=[])
         self.current_dest: Point = (0, 0)
         self.location_nodes: list[Point] = []
         self.last_location_recorded_at = 0.0
+        self.game_start_time = 0
         self.location_map_path: Path | None = None
 
         self.mqtt = MqttClient()
@@ -168,8 +170,8 @@ class GeoQuest:
         self.last_location_recorded_at = time.monotonic()
 
         self.route = get_route(initial_location, self.destination)
-        print(f"Info: {self.route.distance}")
-        print(f"Info: {self.route.duration}")
+        print(f"Info: {self.route.distance_str}")
+        print(f"Info: {self.route.duration_str}")
         self.route.points = calculate_points_with_difficulty(
             self.route.points, self.difficulty
         )
@@ -177,6 +179,7 @@ class GeoQuest:
         self.create_game_screen()
 
     def create_game_screen(self):
+        self.game_start_time = time.monotonic()
         self.wait_text.destroy()
 
         self.start_text = customtkinter.CTkLabel(
@@ -224,10 +227,16 @@ class GeoQuest:
             self.location_nodes.append(final_location)
 
         self.start_text.destroy()
+        t = time.monotonic() - self.game_start_time
+        t0 = self.route.duration
+        score = max(0, round(100 * (1 - (math.log10(t / t0) / math.log10(5)))))
 
         self.finished = customtkinter.CTkLabel(
             self.app,
-            text="You did it! 🎉🎉",
+            text=(
+                "You did it! 🎉🎉\n\n"
+                f"Score: {score}/100"
+            ),
             font=("Arial", 18),
         )
         self.finished.place(relx=0.5, rely=0.5, anchor="center")
@@ -250,3 +259,4 @@ class GeoQuest:
 
 if __name__ == "__main__":
     GeoQuest().run()
+
