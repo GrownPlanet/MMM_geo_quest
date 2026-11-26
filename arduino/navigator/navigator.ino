@@ -1,7 +1,8 @@
 /*
  * GeoQuest navigator
  *
- * - Ontvangt tussenpunt via Serial:  WP:<lat>,<lon>
+ * - Ontvangt tussenpunten via MQTT: NEXT<lon>,<lat>
+ * - Publiceert de GPS-locatie via MQTT: LOC<lon>,<lat>
  * - Leest eigen positie via GPS (bearing maximaal elke seconde herberekenen)
  * - Tussen GPS-updates: heading via BMI270/BMM150 (tilt-compensatie + smoothing)
  * - Toont relatieve pijl naar het doel op OLED
@@ -13,11 +14,29 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Arduino_BMI270_BMM150.h>
+#include <WiFiEspAT.h>
+#include <PubSubClient.h>
+#include <stdlib.h>
+#include <string.h>
 
 // --- Hardware ---
 UART GPSSerial(digitalPinToPinName(7), digitalPinToPinName(8), NC, NC);
 Adafruit_GPS GPS(&GPSSerial);
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+// ESP8266 AT-module is connected to Serial1 (D0=RX, D1=TX).
+const unsigned long ESP8266_BAUD = 115200;
+const char WIFI_SSID[] = "123test";
+const char WIFI_PASSWORD[] = "12345test";
+const char MQTT_BROKER[] = "public.mqttserver.eu";
+const uint16_t MQTT_PORT = 1883;
+const char MQTT_OUT_TOPIC[] = "ugent/MMM/GeoQuest/arduino";
+const char MQTT_IN_TOPIC[] = "ugent/MMM/GeoQuest/computer";
+const unsigned long NETWORK_RETRY_INTERVAL_MS = 10000;
+const unsigned long LOCATION_PUBLISH_INTERVAL_MS = 1000;
+
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
 
 // --- Timing ---
 const unsigned long GPS_BEARING_INTERVAL_MS = 1000;
@@ -43,6 +62,7 @@ const float MAG_SCALE_Z = 1.0275f;
 
 // --- Waypoint / GPS state ---
 bool haveTarget = false;
+bool routeComplete = false;
 float targetLat = 0.0f;
 float targetLon = 0.0f;
 
@@ -58,6 +78,11 @@ bool haveBearing = false;
 unsigned long lastPositionUpdateMs = 0;
 unsigned long lastBearingUpdateMs = 0;
 unsigned long lastDisplayMs = 0;
+unsigned long lastWiFiAttemptMs = 0;
+unsigned long lastMqttAttemptMs = 0;
+unsigned long lastLocationPublishMs = 0;
+bool hasPublishedLocation = false;
+bool wifiModuleReady = false;
 
 // --- IMU / heading ---
 float headingDeg = 0.0f;          // 0..360, device forward vs true north
@@ -134,6 +159,189 @@ void showBootMessage(const char *msg) {
 }
 
 // ---------------------------------------------------------------------------
+// MQTT: waypoint ontvangen en GPS-locatie publiceren
+// ---------------------------------------------------------------------------
+
+void handleMqttMessage(char *topic, byte *payload, unsigned int length) {
+  if (strcmp(topic, MQTT_IN_TOPIC) != 0) return;
+
+  String message;
+  message.reserve(length);
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  message.trim();
+
+  if (message == "LAST") {
+    haveTarget = false;
+    haveBearing = false;
+    routeComplete = true;
+    Serial.println("MQTT: LAST");
+    return;
+  }
+
+  if (!message.startsWith("NEXT")) {
+    Serial.print("ERROR: unknown MQTT message: ");
+    Serial.println(message);
+    return;
+  }
+
+  String coordinates = message.substring(4);
+  int comma = coordinates.indexOf(',');
+  if (comma <= 0 || comma >= (int)coordinates.length() - 1) {
+    Serial.println("ERROR: MQTT NEXT format; expected NEXT<lon>,<lat>");
+    return;
+  }
+
+  String longitude = coordinates.substring(0, comma);
+  String latitude = coordinates.substring(comma + 1);
+  char *lonEnd;
+  char *latEnd;
+  float lon = strtof(longitude.c_str(), &lonEnd);
+  float lat = strtof(latitude.c_str(), &latEnd);
+  if (lonEnd == longitude.c_str() || *lonEnd != '\0' ||
+      latEnd == latitude.c_str() || *latEnd != '\0' ||
+      !isfinite(lon) || !isfinite(lat) ||
+      lat < -90.0f || lat > 90.0f || lon < -180.0f || lon > 180.0f) {
+    Serial.println("ERROR: MQTT NEXT coordinates invalid or out of range");
+    return;
+  }
+
+  targetLat = lat;
+  targetLon = lon;
+  haveTarget = true;
+  routeComplete = false;
+  haveBearing = false;
+  lastBearingUpdateMs = 0;
+  Serial.print("MQTT: NEXT ");
+  Serial.print(targetLon, 6);
+  Serial.print(",");
+  Serial.println(targetLat, 6);
+}
+
+const char *wifiStatusName(int status) {
+  switch (status) {
+    case WL_NO_MODULE: return "NO_MODULE";
+    case WL_IDLE_STATUS: return "IDLE";
+    case WL_NO_SSID_AVAIL: return "NO_SSID";
+    case WL_CONNECTED: return "CONNECTED";
+    case WL_CONNECT_FAILED: return "CONNECT_FAILED";
+    case WL_CONNECTION_LOST: return "CONNECTION_LOST";
+    case WL_DISCONNECTED: return "DISCONNECTED";
+    default: return "UNKNOWN";
+  }
+}
+
+const char *wifiDriverErrorName(EspAtDrvError error) {
+  switch (error) {
+    case EspAtDrvError::NO_ERROR: return "NO_ERROR";
+    case EspAtDrvError::NOT_INITIALIZED: return "NOT_INITIALIZED";
+    case EspAtDrvError::AT_NOT_RESPONDIG: return "AT_NOT_RESPONDING";
+    case EspAtDrvError::AT_ERROR: return "AT_ERROR";
+    case EspAtDrvError::NO_AP: return "NO_AP";
+    case EspAtDrvError::LINK_ALREADY_CONNECTED: return "LINK_ALREADY_CONNECTED";
+    case EspAtDrvError::LINK_NOT_ACTIVE: return "LINK_NOT_ACTIVE";
+    case EspAtDrvError::RECEIVE: return "RECEIVE";
+    case EspAtDrvError::SEND: return "SEND";
+    case EspAtDrvError::UDP_BUSY: return "UDP_BUSY";
+    case EspAtDrvError::UDP_LARGE: return "UDP_LARGE";
+    case EspAtDrvError::UDP_TIMEOUT: return "UDP_TIMEOUT";
+    default: return "UNKNOWN";
+  }
+}
+
+void maintainMqttConnection() {
+  const unsigned long now = millis();
+
+  if (!wifiModuleReady) {
+    if (lastWiFiAttemptMs == 0 ||
+        now - lastWiFiAttemptMs >= NETWORK_RETRY_INTERVAL_MS) {
+      lastWiFiAttemptMs = now;
+      Serial.println("Initializing ESP8266 AT module...");
+      wifiModuleReady = WiFi.init(Serial1);
+      if (!wifiModuleReady) {
+        Serial.println("ERROR: ESP8266 AT module not responding; will retry");
+        return;
+      }
+      lastWiFiAttemptMs = 0;
+    } else {
+      return;
+    }
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (mqttClient.connected()) mqttClient.disconnect();
+
+    if (lastWiFiAttemptMs == 0 ||
+        now - lastWiFiAttemptMs >= NETWORK_RETRY_INTERVAL_MS) {
+      lastWiFiAttemptMs = now;
+      Serial.println("Connecting to phone hotspot...");
+      int beginStatus = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      EspAtDrvError driverError = WiFi.getLastDriverError();
+      int currentStatus = WiFi.status();
+
+      Serial.print("WiFi.begin: ");
+      Serial.println(wifiStatusName(beginStatus));
+      Serial.print("WiFi.status: ");
+      Serial.println(wifiStatusName(currentStatus));
+      Serial.print("ESP8266 AT error: ");
+      Serial.println(wifiDriverErrorName(driverError));
+
+      if (currentStatus == WL_CONNECTED) {
+        Serial.println("WiFi connected");
+      } else {
+        Serial.println("ERROR: WiFi connection failed; will retry in 10 seconds");
+      }
+    }
+    return;
+  }
+
+  if (!mqttClient.connected()) {
+    if (lastMqttAttemptMs == 0 ||
+        now - lastMqttAttemptMs >= NETWORK_RETRY_INTERVAL_MS) {
+      lastMqttAttemptMs = now;
+      Serial.println("Connecting to MQTT broker...");
+      if (mqttClient.connect("GeoQuestNavigator")) {
+        if (mqttClient.subscribe(MQTT_IN_TOPIC)) {
+          Serial.println("MQTT connected and subscribed");
+          hasPublishedLocation = false;
+        } else {
+          Serial.println("ERROR: MQTT subscribe failed");
+          mqttClient.disconnect();
+        }
+      } else {
+        Serial.print("ERROR: MQTT connection failed, state ");
+        Serial.println(mqttClient.state());
+      }
+    }
+    return;
+  }
+
+  mqttClient.loop();
+}
+
+void publishCurrentLocation() {
+  if (!haveFix || !mqttClient.connected()) return;
+
+  const unsigned long now = millis();
+  if (hasPublishedLocation &&
+      now - lastLocationPublishMs < LOCATION_PUBLISH_INTERVAL_MS) {
+    return;
+  }
+  lastLocationPublishMs = now;
+
+  char payload[40];
+  snprintf(payload, sizeof(payload), "LOC%.6f,%.6f", currentLon, currentLat);
+  if (mqttClient.publish(MQTT_OUT_TOPIC, payload)) {
+    hasPublishedLocation = true;
+    Serial.print("MQTT: ");
+    Serial.println(payload);
+  } else {
+    Serial.println("ERROR: MQTT location publish failed");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Serial: waypoint ontvangen
 // Protocol:  WP:<lat>,<lon>     bv. WP:51.053700,3.725000
 // Optioneel: CLEAR              wis waypoint
@@ -147,6 +355,7 @@ void handleSerialLine(String line) {
 
   if (line.equalsIgnoreCase("CLEAR")) {
     haveTarget = false;
+    routeComplete = false;
     haveBearing = false;
     Serial.println("OK CLEAR");
     return;
@@ -216,6 +425,7 @@ void handleSerialLine(String line) {
     targetLat = lat;
     targetLon = lon;
     haveTarget = true;
+    routeComplete = false;
     haveBearing = false;  // force herberekening bij volgende GPS-cycle
     lastBearingUpdateMs = 0;
     Serial.print("OK WP ");
@@ -406,9 +616,7 @@ void updateDisplay() {
   display.setCursor(0, 0);
 
   if (!haveTarget) {
-    display.println("Wacht op WP...");
-    display.println("Serial:");
-    display.println("WP:lat,lon");
+    display.println(routeComplete ? "Route voltooid" : "Wacht op NEXT...");
     display.display();
     return;
   }
@@ -506,10 +714,18 @@ void setup() {
   delay(200);
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 
+  Serial1.begin(ESP8266_BAUD);
+  wifiModuleReady = WiFi.init(Serial1);
+  if (!wifiModuleReady) {
+    Serial.println("ERROR: ESP8266 AT module not responding; will retry");
+  }
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(handleMqttMessage);
+
   showBootMessage("Navigator OK");
   delay(800);
   Serial.println("READY");
-  Serial.println("Send WP:<lat>,<lon>");
+  Serial.println("Waiting for MQTT NEXT<lon>,<lat>");
   if (!haveMagCalibration) {
     Serial.println("Magnetometer not calibrated. Send CAL, rotate in all orientations, then send CALDONE.");
   }
@@ -518,6 +734,8 @@ void setup() {
 void loop() {
   pollSerial();
   pollGPS();
+  maintainMqttConnection();
+  publishCurrentLocation();
   updateHeadingFromIMU();
   updateBearingFromGPS();
   updateDisplay();

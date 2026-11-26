@@ -12,10 +12,13 @@
 
 - zet de `MAPBOX_TOKEN` in `.env`
 - installeer `requirements.txt`: `pip install -r requirements.txt`
+- volg [de Arduino-navigator setup](arduino/navigator/README.md) voor de
+  boardondersteuning, libraries, ESP8266-bedrading en hotspotconfiguratie
 
 ## Hoe uit te voeren
 
-- arduino: open het `.ino` bestand in [Arduino IDE](https://www.arduino.cc/en/software/) en stuur het door
+- arduino: zet de gsm-hotspot aan en upload
+  `arduino/navigator/navigator.ino` vanuit [Arduino IDE](https://www.arduino.cc/en/software/)
 - python: run `python computer/main.py`
 - pathfinding server:
   - clone en run [gpath](https://github.com/GrownPlanet/gpath), verdere instructies staan in de readme van dat project
@@ -27,7 +30,8 @@
 - [x] korste pad genereren
 - [x] difficulty toepassen
 - [x] MQTT server communicatie
-  - [x] initiële locatie opvragen
+  - [x] initiële GPS-locatie ontvangen
+  - [x] volgende tussenpunten versturen en locatie-updates verwerken
 - [x] difficulty vragen
 - [x] main loop
 - [ ] aantal punten in easy, medium, hard en expert bespreken
@@ -35,11 +39,11 @@
 
 ### Arduino
 
-- [ ] MQTT server communicatie
-  - [ ] huidige punt ophalen
-  - [ ] aankomst aangeven
+- [x] MQTT server communicatie via ESP8266 met AT-firmware
+  - [x] GPS-locatie publiceren
+  - [x] `NEXT`-tussenpunten en `LAST` ontvangen
 - [x] richting naar volgende punt
-- [ ] aankomst detecteren
+- [x] aankomst tonen op het OLED (binnen 15 meter)
 - [x] richting aangeven op display
 
 ### Extra (indien er tijd over is)
@@ -48,16 +52,22 @@
 
 ## Communicatie-schema
 
-De arduino en computer zullen via MQTT praten, de gebruikte server is `public.mqttserver.eu`. De arduino zal berichten sturen in `ugent/MMM/GeoQuest/arduino` en luisteren in `ugent/MMM/GeoQuest/computer` en vice versa.
+De Arduino en computer communiceren via MQTT met broker `public.mqttserver.eu`
+op poort `1883`. De Arduino heeft hiervoor een ESP8266-module met AT-firmware
+nodig en verbindt via een gsm-hotspot. Zie
+[arduino/navigator/README.md](arduino/navigator/README.md) voor de hardware- en
+library-instellingen.
 
-De berichten die de arduino kan sturen zijn als volgt:
+De Arduino publiceert op `ugent/MMM/GeoQuest/arduino`:
 
-- `LOC(lon),(lat)`: de huidige locatie
+- `LOC<lon>,<lat>`: huidige GPS-locatie, maximaal eenmaal per seconde zolang
+  er een GPS-fix en MQTT-verbinding is
 
-De berichten die de computer kan sturen zijn als volgt:
+De computer publiceert op `ugent/MMM/GeoQuest/computer`:
 
-- `NEXT(lon),(lat)`: de volgende locatie
-- `LAST`: er zijn geen locaties meer
+- `NEXT<lon>,<lat>`: volgend tussenpunt (longitude eerst); de Arduino berekent
+  en toont de richting ernaartoe
+- `LAST`: de route is voltooid
 
 ## Plan
 
@@ -69,11 +79,11 @@ Kort stappenplan code:
 4. route aanvragen [x]
 5. moeilijkheid selecteren [x]
 6. aantal kruispunten op basis van moeilijkheid [x]
-7. volgende punt wordt aan arduino gegeven
+7. volgende punt wordt aan Arduino gegeven [x]
 8. richting bepalen en weergeven [x]
    - door middel van gps en IMU [x]
-9. aan punt gearriveerd? -> naar stap 7
-10. aan laatste punt? /Geslaagd!/ score (tijd?) weergeven.
+9. aankomst bepalen met GPS-locatie-updates -> naar stap 7 [x]
+10. aankomst bij het laatste punt tonen [x]
 
 ## File structure
 
