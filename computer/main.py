@@ -2,11 +2,14 @@ import hashlib
 import math
 import os
 import queue
+import tempfile
+import time
 import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import customtkinter
+import folium
 import paho.mqtt.client as mqtt
 import requests
 from dotenv import load_dotenv
@@ -134,6 +137,9 @@ class GeoQuest:
 
         self.route: Route = Route(distance=f"/", duration=f"/", points=[])
         self.current_dest: Point = (0, 0)
+        self.location_nodes: list[Point] = []
+        self.last_location_recorded_at = 0.0
+        self.location_map_path: Path | None = None
 
         self.messages: queue.Queue[str] = queue.Queue()
 
@@ -316,6 +322,8 @@ class GeoQuest:
             return
 
         print(f"Info: initial location: {initial_location}")
+        self.location_nodes.append(initial_location)
+        self.last_location_recorded_at = time.monotonic()
 
         self.route = get_route(initial_location, self.destination)
         print(f"Info: {self.route.distance}")
@@ -354,17 +362,69 @@ class GeoQuest:
         dist = haversine_distance(current_location, self.current_dest)
         print(f"Info: new location: {current_location}; dist: {dist}")
 
+        now = time.monotonic()
+        location_recorded = now - self.last_location_recorded_at >= 1
+        if location_recorded:
+            self.location_nodes.append(current_location)
+            self.last_location_recorded_at = now
+
         if dist < MIN_DIST_M:
             if len(self.route.points) == 0:
-                self.arrived()
+                self.arrived(current_location, location_recorded)
                 return
 
             self.set_next_location()
 
         self.app.after(100, self.main_game_loop)
 
-    def arrived(self):
+    def create_location_map(self) -> Path:
+        coordinates = [[lat, lon] for lon, lat in self.location_nodes]
+        location_map = folium.Map(location=coordinates[0], zoom_start=15)
+
+        if len(coordinates) > 1:
+            folium.PolyLine(
+                coordinates,
+                color="blue",
+                weight=7,
+                opacity=0.9,
+                smooth_factor=0,
+                tooltip="Path taken",
+            ).add_to(location_map)
+            location_map.fit_bounds(coordinates)
+
+        for index, coordinate in enumerate(coordinates, start=1):
+            folium.CircleMarker(
+                location=coordinate,
+                radius=4,
+                color="blue",
+                fill=True,
+                fill_opacity=0.8,
+                popup=f"Location {index}",
+            ).add_to(location_map)
+
+        folium.Marker(coordinates[0], tooltip="Start", icon=folium.Icon(color="green")).add_to(
+            location_map
+        )
+        folium.Marker(coordinates[-1], tooltip="Finish", icon=folium.Icon(color="red")).add_to(
+            location_map
+        )
+
+        with tempfile.NamedTemporaryFile(prefix="geoquest-", suffix=".html", delete=False) as file:
+            map_path = Path(file.name)
+        location_map.save(str(map_path))
+        return map_path
+
+    def open_location_map(self):
+        if self.location_map_path is not None and not webbrowser.open(
+            self.location_map_path.as_uri()
+        ):
+            print("Error: Could not open location map in browser.")
+
+    def arrived(self, final_location: Point, location_recorded: bool):
         self.client.publish(OUT_TOPIC, "LAST")
+
+        if not location_recorded:
+            self.location_nodes.append(final_location)
 
         self.start_text.destroy()
 
@@ -374,6 +434,15 @@ class GeoQuest:
             font=("Arial", 18),
         )
         self.finished.place(relx=0.5, rely=0.5, anchor="center")
+
+        self.location_map_path = self.create_location_map()
+        self.map_button = customtkinter.CTkButton(
+            self.app,
+            text="Open route map",
+            command=self.open_location_map,
+        )
+        self.map_button.place(relx=0.5, rely=0.93, anchor="center")
+        self.open_location_map()
 
     def run(self):
         self.app.mainloop()

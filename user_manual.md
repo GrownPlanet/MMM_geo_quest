@@ -64,6 +64,8 @@
 
 * Upon reaching the final point, your Arduino and computer will notify you that you have **succeeded** (*Geslaagd!*) and display your final score/time.
 
+* GPS locations are recorded once per second. A map of the recorded route opens when the quest ends; use **"Open route map"** to reopen it.
+
 ### 4. Troubleshooting
 
 * **Stuck on *"Waiting on current location from arduino..."*:**
@@ -133,6 +135,8 @@
 * Blijf de tussenpunten volgen totdat je de eindbestemming bereikt.
 
 * Bij aankomst op het laatste punt krijg je de melding **Geslaagd!** en wordt je eindscore (zoals je totale tijd) weergegeven.
+
+* GPS-locaties worden elke seconde vastgelegd. Wanneer de quest eindigt, wordt een kaart van de afgelegde route geopend; gebruik **"Open route map"** om de kaart opnieuw te openen.
 
 ### 4. Veelvoorkomende problemen (Troubleshooting)
 
