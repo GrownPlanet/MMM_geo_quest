@@ -26,6 +26,10 @@ Adafruit_SSD1306 display(128, 64, &Wire, -1);
 
 // ESP8266 AT-module is connected to Serial1 (D0=RX, D1=TX).
 const unsigned long ESP8266_BAUD = 115200;
+// Sluit een momentane drukknop aan tussen D2 en GND.
+const uint8_t CALIBRATION_BUTTON_PIN = 2;
+const unsigned long BUTTON_DEBOUNCE_MS = 50;
+const unsigned long CALIBRATION_FEEDBACK_DURATION_MS = 2000;
 const char WIFI_SSID[] = "123test";
 const char WIFI_PASSWORD[] = "12345test";
 const char MQTT_BROKER[] = "public.mqttserver.eu";
@@ -41,12 +45,14 @@ PubSubClient mqttClient(wifiClient);
 // --- Timing ---
 const unsigned long GPS_BEARING_INTERVAL_MS = 1000;
 const unsigned long GPS_DATA_TIMEOUT_MS = 3500;
+const unsigned long GPS_STATUS_LOG_INTERVAL_MS = 10000;
 const unsigned long DISPLAY_INTERVAL_MS = 200;
 const float ARRIVAL_RADIUS_M = 7.5f;
+const unsigned long ARRIVAL_MESSAGE_DURATION_MS = 1500;
 const float HEADING_SMOOTH_ALPHA = 0.18f;  // lager = stabieler, trager
-// Draai heading zodat "vooruit" = pijl omhoog (pas aan per montage, bv. 90/180)
-const float HEADING_MOUNT_OFFSET_DEG = 0.0f;
-// Kompasheading hoort met de klok mee toe te nemen; keer de Y-as om voor deze sensororiëntatie.
+// Compenseer de gemeten 90° afwijking: de pijl stond 90° te ver met de klok mee.
+const float HEADING_MOUNT_OFFSET_DEG = 90.0f;
+// Keer de Y-as om zodat de heading op deze sensor met de klok mee toeneemt.
 const bool HEADING_REVERSE_Y = true;
 // Oostelijke magnetische declinatie is positief. Stel in voor de speelregio.
 const float MAGNETIC_DECLINATION_DEG = 2.44f;  // Centrum Gent, WMM-2025 (19-11-2026)
@@ -74,15 +80,33 @@ float currentLon = 0.0f;
 float bearingToTargetDeg = 0.0f;  // absolute, true north
 float distanceToTargetM = 0.0f;
 bool haveBearing = false;
+bool arrivalMessageActive = false;
+bool arrivalMessageShownForTarget = false;
 
 unsigned long lastPositionUpdateMs = 0;
 unsigned long lastBearingUpdateMs = 0;
 unsigned long lastDisplayMs = 0;
+unsigned long arrivalMessageStartedMs = 0;
+unsigned long lastGpsStatusLogMs = 0;
 unsigned long lastWiFiAttemptMs = 0;
 unsigned long lastMqttAttemptMs = 0;
 unsigned long lastLocationPublishMs = 0;
 bool hasPublishedLocation = false;
 bool wifiModuleReady = false;
+bool wifiConnected = false;
+bool mqttConnected = false;
+
+enum CalibrationFeedback {
+  CALIBRATION_FEEDBACK_NONE,
+  CALIBRATION_FEEDBACK_SUCCESS,
+  CALIBRATION_FEEDBACK_TOO_FEW_SAMPLES,
+  CALIBRATION_FEEDBACK_INCOMPLETE_ROTATION
+};
+CalibrationFeedback calibrationFeedback = CALIBRATION_FEEDBACK_NONE;
+unsigned long calibrationFeedbackStartedMs = 0;
+int calibrationButtonLastReading = HIGH;
+int calibrationButtonState = HIGH;
+unsigned long calibrationButtonLastChangeMs = 0;
 
 // --- IMU / heading ---
 float headingDeg = 0.0f;          // 0..360, device forward vs true north
@@ -175,6 +199,7 @@ void handleMqttMessage(char *topic, byte *payload, unsigned int length) {
   if (message == "LAST") {
     haveTarget = false;
     haveBearing = false;
+    arrivalMessageActive = false;
     routeComplete = true;
     Serial.println("MQTT: LAST");
     return;
@@ -212,6 +237,8 @@ void handleMqttMessage(char *topic, byte *payload, unsigned int length) {
   haveTarget = true;
   routeComplete = false;
   haveBearing = false;
+  arrivalMessageActive = false;
+  arrivalMessageShownForTarget = false;
   lastBearingUpdateMs = 0;
   Serial.print("MQTT: NEXT ");
   Serial.print(targetLon, 6);
@@ -254,6 +281,8 @@ void maintainMqttConnection() {
   const unsigned long now = millis();
 
   if (!wifiModuleReady) {
+    wifiConnected = false;
+    mqttConnected = false;
     if (lastWiFiAttemptMs == 0 ||
         now - lastWiFiAttemptMs >= NETWORK_RETRY_INTERVAL_MS) {
       lastWiFiAttemptMs = now;
@@ -270,6 +299,8 @@ void maintainMqttConnection() {
   }
 
   if (WiFi.status() != WL_CONNECTED) {
+    wifiConnected = false;
+    mqttConnected = false;
     if (mqttClient.connected()) mqttClient.disconnect();
 
     if (lastWiFiAttemptMs == 0 ||
@@ -295,14 +326,17 @@ void maintainMqttConnection() {
     }
     return;
   }
+  wifiConnected = true;
 
   if (!mqttClient.connected()) {
+    mqttConnected = false;
     if (lastMqttAttemptMs == 0 ||
         now - lastMqttAttemptMs >= NETWORK_RETRY_INTERVAL_MS) {
       lastMqttAttemptMs = now;
       Serial.println("Connecting to MQTT broker...");
       if (mqttClient.connect("GeoQuestNavigator")) {
         if (mqttClient.subscribe(MQTT_IN_TOPIC)) {
+          mqttConnected = true;
           Serial.println("MQTT connected and subscribed");
           hasPublishedLocation = false;
         } else {
@@ -318,6 +352,7 @@ void maintainMqttConnection() {
   }
 
   mqttClient.loop();
+  mqttConnected = mqttClient.connected();
 }
 
 void publishCurrentLocation() {
@@ -341,6 +376,85 @@ void publishCurrentLocation() {
   }
 }
 
+void startMagCalibration() {
+  magCalibrationRunning = true;
+  magCalibrationHasSample = false;
+  magCalibrationSamples = 0;
+  haveHeading = false;
+  calibrationFeedback = CALIBRATION_FEEDBACK_NONE;
+  Serial.println("MAG CAL started: rotate the device in all orientations, then press the button to stop");
+}
+
+void finishMagCalibration() {
+  if (!magCalibrationRunning) {
+    Serial.println("ERR MAG CAL not running");
+    return;
+  }
+  magCalibrationRunning = false;
+
+  if (magCalibrationSamples < 100 || !magCalibrationHasSample) {
+    calibrationFeedback = CALIBRATION_FEEDBACK_TOO_FEW_SAMPLES;
+    calibrationFeedbackStartedMs = millis();
+    Serial.println("ERR MAG CAL too few samples; rotate longer and try again");
+    return;
+  }
+
+  const float rangeX = (magMaxX - magMinX) * 0.5f;
+  const float rangeY = (magMaxY - magMinY) * 0.5f;
+  const float rangeZ = (magMaxZ - magMinZ) * 0.5f;
+  if (rangeX < 5.0f || rangeY < 5.0f || rangeZ < 5.0f) {
+    calibrationFeedback = CALIBRATION_FEEDBACK_INCOMPLETE_ROTATION;
+    calibrationFeedbackStartedMs = millis();
+    Serial.println("ERR MAG CAL incomplete rotation; rotate across all axes and try again");
+    return;
+  }
+
+  magOffsetX = (magMaxX + magMinX) * 0.5f;
+  magOffsetY = (magMaxY + magMinY) * 0.5f;
+  magOffsetZ = (magMaxZ + magMinZ) * 0.5f;
+  const float averageRange = (rangeX + rangeY + rangeZ) / 3.0f;
+  magScaleX = averageRange / rangeX;
+  magScaleY = averageRange / rangeY;
+  magScaleZ = averageRange / rangeZ;
+  haveMagCalibration = true;
+  haveHeading = false;
+  calibrationFeedback = CALIBRATION_FEEDBACK_SUCCESS;
+  calibrationFeedbackStartedMs = millis();
+
+  Serial.println("MAG CAL values (copy to the constants in navigator.ino):");
+  Serial.print("MAG_OFFSET_X = "); Serial.println(magOffsetX, 4);
+  Serial.print("MAG_OFFSET_Y = "); Serial.println(magOffsetY, 4);
+  Serial.print("MAG_OFFSET_Z = "); Serial.println(magOffsetZ, 4);
+  Serial.print("MAG_SCALE_X = "); Serial.println(magScaleX, 4);
+  Serial.print("MAG_SCALE_Y = "); Serial.println(magScaleY, 4);
+  Serial.print("MAG_SCALE_Z = "); Serial.println(magScaleZ, 4);
+  Serial.println("Set MAG_CALIBRATION_CONFIGURED to true, then upload again to keep them after reboot.");
+}
+
+void pollCalibrationButton() {
+  const unsigned long now = millis();
+  const int reading = digitalRead(CALIBRATION_BUTTON_PIN);
+
+  if (reading != calibrationButtonLastReading) {
+    calibrationButtonLastReading = reading;
+    calibrationButtonLastChangeMs = now;
+  }
+
+  if (now - calibrationButtonLastChangeMs < BUTTON_DEBOUNCE_MS ||
+      reading == calibrationButtonState) {
+    return;
+  }
+
+  calibrationButtonState = reading;
+  if (calibrationButtonState == LOW) {
+    if (magCalibrationRunning) {
+      finishMagCalibration();
+    } else {
+      startMagCalibration();
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Serial: waypoint ontvangen
 // Protocol:  WP:<lat>,<lon>     bv. WP:51.053700,3.725000
@@ -357,55 +471,19 @@ void handleSerialLine(String line) {
     haveTarget = false;
     routeComplete = false;
     haveBearing = false;
+    arrivalMessageActive = false;
+    arrivalMessageShownForTarget = false;
     Serial.println("OK CLEAR");
     return;
   }
 
   if (line.equalsIgnoreCase("CAL")) {
-    magCalibrationRunning = true;
-    magCalibrationHasSample = false;
-    magCalibrationSamples = 0;
-    Serial.println("MAG CAL started: rotate the device in all orientations, then send CALDONE");
+    startMagCalibration();
     return;
   }
 
   if (line.equalsIgnoreCase("CALDONE")) {
-    if (!magCalibrationRunning) {
-      Serial.println("ERR MAG CAL not running");
-      return;
-    }
-    magCalibrationRunning = false;
-
-    if (magCalibrationSamples < 100 || !magCalibrationHasSample) {
-      Serial.println("ERR MAG CAL too few samples; send CAL and try again");
-      return;
-    }
-
-    const float rangeX = (magMaxX - magMinX) * 0.5f;
-    const float rangeY = (magMaxY - magMinY) * 0.5f;
-    const float rangeZ = (magMaxZ - magMinZ) * 0.5f;
-    if (rangeX < 5.0f || rangeY < 5.0f || rangeZ < 5.0f) {
-      Serial.println("ERR MAG CAL incomplete rotation; each axis range must be at least 10 uT");
-      return;
-    }
-
-    magOffsetX = (magMaxX + magMinX) * 0.5f;
-    magOffsetY = (magMaxY + magMinY) * 0.5f;
-    magOffsetZ = (magMaxZ + magMinZ) * 0.5f;
-    const float averageRange = (rangeX + rangeY + rangeZ) / 3.0f;
-    magScaleX = averageRange / rangeX;
-    magScaleY = averageRange / rangeY;
-    magScaleZ = averageRange / rangeZ;
-    haveMagCalibration = true;
-
-    Serial.println("MAG CAL values (copy to the constants in navigator.ino):");
-    Serial.print("MAG_OFFSET_X = "); Serial.println(magOffsetX, 4);
-    Serial.print("MAG_OFFSET_Y = "); Serial.println(magOffsetY, 4);
-    Serial.print("MAG_OFFSET_Z = "); Serial.println(magOffsetZ, 4);
-    Serial.print("MAG_SCALE_X = "); Serial.println(magScaleX, 4);
-    Serial.print("MAG_SCALE_Y = "); Serial.println(magScaleY, 4);
-    Serial.print("MAG_SCALE_Z = "); Serial.println(magScaleZ, 4);
-    Serial.println("Set MAG_CALIBRATION_CONFIGURED to true, then upload again to keep them after reboot.");
+    finishMagCalibration();
     return;
   }
 
@@ -427,6 +505,8 @@ void handleSerialLine(String line) {
     haveTarget = true;
     routeComplete = false;
     haveBearing = false;  // force herberekening bij volgende GPS-cycle
+    arrivalMessageActive = false;
+    arrivalMessageShownForTarget = false;
     lastBearingUpdateMs = 0;
     Serial.print("OK WP ");
     Serial.print(targetLat, 6);
@@ -473,14 +553,25 @@ void pollGPS() {
   const unsigned long now = millis();
   if (!havePositionSentence || now - lastPositionUpdateMs > GPS_DATA_TIMEOUT_MS) {
     haveFix = false;
+    if (now - lastGpsStatusLogMs >= GPS_STATUS_LOG_INTERVAL_MS) {
+      lastGpsStatusLogMs = now;
+      Serial.println("GPS: waiting for a fix; LOC cannot be sent yet");
+    }
     return;
   }
 
   if (!GPS.fix) {
     haveFix = false;
+    if (now - lastGpsStatusLogMs >= GPS_STATUS_LOG_INTERVAL_MS) {
+      lastGpsStatusLogMs = now;
+      Serial.println("GPS: no fix; LOC cannot be sent yet");
+    }
     return;
   }
 
+  if (!haveFix) {
+    Serial.println("GPS fix acquired");
+  }
   currentLat = GPS.latitudeDegrees;
   currentLon = GPS.longitudeDegrees;
   haveFix = true;
@@ -562,7 +653,7 @@ void updateHeadingFromIMU() {
   float mxH = mx * cosP + mz * sinP;
   float myH = mx * sinR * sinP + my * cosR - mz * sinR * cosP;
 
-  // Heading is clockwise-positive; de Y-as van deze sensororiëntatie heeft het tegengestelde teken.
+  // Gebruik een clockwise-positive heading voor de relatieve pijlberekening.
   float headingY = HEADING_REVERSE_Y ? -myH : myH;
   float rawHeading = wrap360(radToDeg(atan2(headingY, mxH)) +
                              HEADING_MOUNT_OFFSET_DEG +
@@ -615,49 +706,122 @@ void updateDisplay() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
 
+  if (magCalibrationRunning) {
+    display.println("KALIBREREN");
+    display.println("Draai alle richtingen");
+    display.print("Samples: ");
+    display.println(magCalibrationSamples);
+    display.println("Knop: stoppen");
+    display.display();
+    return;
+  }
+
+  if (calibrationFeedback != CALIBRATION_FEEDBACK_NONE) {
+    if (now - calibrationFeedbackStartedMs < CALIBRATION_FEEDBACK_DURATION_MS) {
+      if (calibrationFeedback == CALIBRATION_FEEDBACK_SUCCESS) {
+        display.println("Kalibratie gelukt");
+        display.println("Kompas actief");
+      } else if (calibrationFeedback == CALIBRATION_FEEDBACK_TOO_FEW_SAMPLES) {
+        display.println("Te weinig samples");
+        display.println("Draai langer");
+      } else {
+        display.println("Kalibratie onvolledig");
+        display.println("Draai alle assen");
+      }
+      display.display();
+      return;
+    }
+    calibrationFeedback = CALIBRATION_FEEDBACK_NONE;
+  }
+
+  if (!haveMagCalibration) {
+    display.println("Kalibratie nodig");
+    display.println("Druk knop: start");
+    display.display();
+    return;
+  }
+
+  if (routeComplete) {
+    display.println("Route voltooid");
+    display.display();
+    return;
+  }
+
+  if (haveFix && haveTarget && haveBearing &&
+      distanceToTargetM <= ARRIVAL_RADIUS_M &&
+      !arrivalMessageShownForTarget) {
+    arrivalMessageShownForTarget = true;
+    arrivalMessageActive = true;
+    arrivalMessageStartedMs = now;
+  }
+
+  if (arrivalMessageActive &&
+      now - arrivalMessageStartedMs < ARRIVAL_MESSAGE_DURATION_MS) {
+    display.setTextSize(2);
+    display.setCursor(4, 16);
+    display.println("TUSSENPUNT");
+    display.setCursor(22, 40);
+    display.println("BEREIKT");
+    display.display();
+    return;
+  }
+  arrivalMessageActive = false;
+
   if (!haveTarget) {
-    display.println(routeComplete ? "Route voltooid" : "Wacht op NEXT...");
+    if (!wifiModuleReady) {
+      display.println("ESP8266 niet klaar");
+      display.println("Controleer module");
+      display.display();
+      return;
+    }
+
+    if (!wifiConnected) {
+      display.println("Wi-Fi verbinden...");
+      display.println("Knop: kalibreren");
+      display.display();
+      return;
+    }
+
+    if (!mqttConnected) {
+      display.println("MQTT verbinden...");
+      display.println("Knop: kalibreren");
+      display.display();
+      return;
+    }
+
+    if (!haveFix) {
+      display.println("GPS: zoeken...");
+      display.println("Knop: kalibreren");
+      display.display();
+      return;
+    }
+
+    display.println("GPS OK");
+    display.println("Wacht op NEXT...");
+    display.println("Knop: kalibreren");
     display.display();
     return;
   }
 
   if (!haveFix) {
     display.println("GPS: zoeken...");
-    display.print("Doel ");
-    display.print(targetLat, 4);
     display.display();
     return;
   }
 
-  if (magCalibrationRunning) {
-    display.println("IMU kalibreren...");
-    display.display();
-    return;
-  }
-
-  if (!haveMagCalibration) {
-    display.println("IMU kalibreren");
-    display.println("Serial: CAL");
-    display.display();
-    return;
-  }
-
-  if (!haveHeading || !haveBearing) {
+  if (!haveBearing) {
     display.println("Sensors...");
     display.display();
     return;
   }
 
-  float relative = angleDiffDeg(bearingToTargetDeg, headingDeg);
-  bool arrived = distanceToTargetM <= ARRIVAL_RADIUS_M;
-
-  if (arrived) {
-    display.setTextSize(2);
-    display.setCursor(10, 24);
-    display.println("GEARRIVEERD");
+  if (!haveHeading) {
+    display.println("IMU: zoeken...");
     display.display();
     return;
   }
+
+  float relative = angleDiffDeg(bearingToTargetDeg, headingDeg);
 
   // Info links
   display.print("d=");
@@ -680,6 +844,7 @@ void updateDisplay() {
   display.setCursor(0, 56);
   display.print("Hdg ");
   display.print(headingDeg, 0);
+  display.print("  Knop=CAL");
 
   display.display();
 }
@@ -691,6 +856,10 @@ void updateDisplay() {
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  pinMode(CALIBRATION_BUTTON_PIN, INPUT_PULLUP);
+  calibrationButtonLastReading = digitalRead(CALIBRATION_BUTTON_PIN);
+  calibrationButtonState = calibrationButtonLastReading;
+  calibrationButtonLastChangeMs = millis();
 
   unsigned long waitStart = millis();
   while (!Serial && millis() - waitStart < 3000) {
@@ -726,12 +895,11 @@ void setup() {
   delay(800);
   Serial.println("READY");
   Serial.println("Waiting for MQTT NEXT<lon>,<lat>");
-  if (!haveMagCalibration) {
-    Serial.println("Magnetometer not calibrated. Send CAL, rotate in all orientations, then send CALDONE.");
-  }
+  Serial.println("Press D2 button to start/stop magnetometer calibration.");
 }
 
 void loop() {
+  pollCalibrationButton();
   pollSerial();
   pollGPS();
   maintainMqttConnection();

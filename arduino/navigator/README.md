@@ -11,6 +11,7 @@ ESP8266 met AT-firmware verbindt de Arduino via een gsm-hotspot met MQTT.
 - Arduino Nano 33 BLE Sense Rev2
 - ESP8266-module met door WiFiEspAT ondersteunde AT-firmware
 - GPS-module en SSD1306 OLED
+- Momentane drukknop
 - Gsm-hotspot op 2,4 GHz met WPA2-Personal (geen 5 GHz of WPA3-only)
 
 De ESP8266-module werkt hier als Wi-Fi-modem met AT-firmware; de navigator
@@ -51,6 +52,9 @@ De ESP8266 gebruikt `Serial1`:
 - Voed de ESP8266 met een stabiele 3,3 V-voeding die de stroompieken van de
   module aankan. Gebruik 3,3 V-logicaniveaus.
 
+Sluit de drukknop aan tussen **D2** en **GND**. De sketch gebruikt de interne
+pull-up; de resetknop op het board kan niet als invoerknop worden gebruikt.
+
 De sketch verwacht dat de ESP8266 AT-firmware op **115200 baud** staat. De
 GPS gebruikt 9600 baud.
 
@@ -68,8 +72,9 @@ De Arduino publiceert `LOC` zodra er een GPS-fix en MQTT-verbinding zijn. De
 computer gebruikt de locatie om de route te starten en bepaalt aan de hand van
 latere locatieberichten wanneer het volgende tussenpunt nodig is. De navigator
 berekent zelf de richting naar ieder ontvangen `NEXT`-punt. Het OLED toont
-`GEARRIVEERD` binnen 7,5 meter van het huidige punt; de computer stuurt het
-volgende tussenpunt zodra de locatie binnen 15 meter valt.
+`TUSSENPUNT BEREIKT` gedurende 1,5 seconde binnen 7,5 meter van het huidige
+punt; daarna verschijnt de pijl opnieuw. De computer stuurt het volgende
+tussenpunt zodra de locatie binnen 15 meter valt.
 
 ## Configureren en uploaden
 
@@ -80,25 +85,25 @@ volgende tussenpunt zodra de locatie binnen 15 meter valt.
    ze niet naar de repository.
 3. Kies **Tools > Board > Arduino Nano 33 BLE Sense Rev2** en de juiste
    **Tools > Port**.
-4. Voor een nieuwe magnetometerkalibratie: zet `MAG_CALIBRATION_CONFIGURED`
-   tijdelijk op `false` en upload de sketch.
-5. Open **Tools > Serial Monitor** op **115200 baud** met regelafsluiting
-   **Newline** of **Both NL & CR**. Typ `CAL`, draai en kantel de navigator in
-   alle richtingen en typ daarna `CALDONE`.
-6. Kopieer de getoonde kalibratiewaarden naar de constanten
-   `MAG_OFFSET_X/Y/Z` en `MAG_SCALE_X/Y/Z`. Zet
-   `MAG_CALIBRATION_CONFIGURED` op `true`, stel indien nodig
-   `MAGNETIC_DECLINATION_DEG` en `HEADING_MOUNT_OFFSET_DEG` in en upload opnieuw.
-7. Zet de gsm-hotspot aan en start de computerapplicatie (`python computer/main.py`).
-   Wacht buiten op GPS-fix. In de Serial Monitor kun je de Wi-Fi/MQTT-status en
-   verzonden `LOC`-berichten volgen.
-8. Zodra de computer de eerste locatie ontvangt, stuurt die automatisch het
-   eerste `NEXT`-tussenpunt. De pijl en afstand verschijnen op het OLED.
+4. Zet de gsm-hotspot aan en start de computerapplicatie (`python computer/main.py`).
+5. Kalibreer zonder Serial Monitor: druk op de knop op D2 om te starten. Draai
+   de navigator rustig in alle richtingen; het OLED toont de voortgang. Druk
+   dezelfde knop opnieuw om te stoppen. Het OLED meldt of de kalibratie gelukt
+   is of dat je langer/vollediger moet draaien.
+   De nieuwe waarden gelden direct tot de Arduino wordt gereset; daarna worden
+   de kalibratieconstanten uit de sketch geladen.
+6. Wacht buiten op GPS-fix. Het OLED toont de GPS-, Wi-Fi- en MQTT-status.
+   Zodra de computer de eerste locatie ontvangt, stuurt die automatisch het
+   eerste `NEXT`-tussenpunt en verschijnen de pijl en afstand.
+7. Controleer de pijl met een actief tussenpunt: draai de navigator op dezelfde
+   plaats met de klok mee. `Hdg` moet toenemen en de pijl moet op het OLED
+   tegen de klok in meedraaien, zodat hij naar hetzelfde vaste tussenpunt blijft
+   wijzen.
 
 Voor standalone testen zonder MQTT kun je via Serial Monitor nog steeds
 `WP:<lat>,<lon>` sturen, bijvoorbeeld `WP:51.053700,3.725000`. `CLEAR` wist het
-handmatige waypoint. `CAL` en `CALDONE` starten en beeindigen de
-magnetometerkalibratie.
+handmatige waypoint. De Serial Monitor is optioneel; `CAL` en `CALDONE` blijven
+beschikbaar als alternatieve manier om de kalibratie te starten en te stoppen.
 
 ## Problemen met Wi-Fi
 
