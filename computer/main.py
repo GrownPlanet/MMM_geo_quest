@@ -229,17 +229,7 @@ class GeoQuest:
         self.start_text.destroy()
         t = time.monotonic() - self.game_start_time
         t0 = self.route.duration
-        score = max(
-            0,
-            round(
-                100 * (
-                    1 - (
-                        math.log10(t / t0) /
-                        math.log10(5)
-                    )
-                )
-            )
-        )
+        score = max(0, round(100 * (1 - (math.log10(t / t0) / math.log10(5)))))
 
         self.finished = customtkinter.CTkLabel(
             self.app,
