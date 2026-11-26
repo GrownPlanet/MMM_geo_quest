@@ -68,8 +68,8 @@ def get_route(origin: Point, destination: Point) -> Route:
     route = directions["routes"][0]
     return Route(
         distance=f"Distance: {route['distance'] / 1000:.2f} km",
-        duration=f"Duration: {route['duration'] / 60:.0f} minutes",
-        duration_seconds=route['duration'],
+        duration_str=f"Duration: {route['duration'] / 60:.0f} minutes",
+        duration=route['duration'],
         points=route["geometry"]["coordinates"] + [[destination[0], destination[1]]],
     )
 

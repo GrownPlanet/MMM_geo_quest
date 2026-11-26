@@ -26,7 +26,7 @@ class GeoQuest:
         self.destination: Point = (0, 0)
         self.difficulty: str = "Easy"
 
-        self.route: Route = Route(distance="/", duration="/", points=[])
+        self.route: Route = Route(distance_str="/", duration_str="/", points=[])
         self.current_dest: Point = (0, 0)
         self.location_nodes: list[Point] = []
         self.last_location_recorded_at = 0.0
@@ -170,8 +170,8 @@ class GeoQuest:
         self.last_location_recorded_at = time.monotonic()
 
         self.route = get_route(initial_location, self.destination)
-        print(f"Info: {self.route.distance}")
-        print(f"Info: {self.route.duration}")
+        print(f"Info: {self.route.distance_str}")
+        print(f"Info: {self.route.duration_str}")
         self.route.points = calculate_points_with_difficulty(
             self.route.points, self.difficulty
         )
@@ -228,7 +228,7 @@ class GeoQuest:
 
         self.start_text.destroy()
         t = time.monotonic() - self.game_start_time
-        t0 = self.route.duration_seconds
+        t0 = self.route.duration
         score = max(
             0,
             round(
