@@ -20,6 +20,17 @@ from route_map import create_location_map
 from route_map import open_location_map as open_route_map
 
 
+def format_duration(seconds: float) -> str:
+    total_seconds = max(0, round(seconds))
+    minutes, remaining_seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02}m {remaining_seconds:02}s"
+    if minutes:
+        return f"{minutes}m {remaining_seconds:02}s"
+    return f"{remaining_seconds}s"
+
+
 class GeoQuest:
     def __init__(self):
         self.word: str | None = None
@@ -27,6 +38,8 @@ class GeoQuest:
         self.difficulty: str = "Easy"
 
         self.route: Route = Route(distance_str="/", duration_str="/", points=[])
+        self.project_route_points: list[Point] = []
+        self.project_waypoints: list[Point] = []
         self.current_dest: Point = (0, 0)
         self.location_nodes: list[Point] = []
         self.last_location_recorded_at = 0.0
@@ -172,9 +185,15 @@ class GeoQuest:
         self.route = get_route(initial_location, self.destination)
         print(f"Info: {self.route.distance_str}")
         print(f"Info: {self.route.duration_str}")
+        self.project_route_points = [
+            point_from_list(point) for point in self.route.points
+        ]
         self.route.points = calculate_points_with_difficulty(
             self.route.points, self.difficulty
         )
+        self.project_waypoints = [
+            point_from_list(point) for point in self.route.points
+        ]
 
         self.create_game_screen()
 
@@ -230,6 +249,14 @@ class GeoQuest:
         t = time.monotonic() - self.game_start_time
         t0 = self.route.duration
         score = max(0, round(100 * (1 - (math.log10(t / t0) / math.log10(5)))))
+        user_distance_m = sum(
+            haversine_distance(self.location_nodes[index - 1], self.location_nodes[index])
+            for index in range(1, len(self.location_nodes))
+        )
+        project_distance = self.route.distance_str.replace("Distance: ", "")
+        user_time = format_duration(t)
+        project_time = format_duration(t0)
+        user_distance = f"{user_distance_m / 1000:.2f} km"
 
         self.finished = customtkinter.CTkLabel(
             self.app,
@@ -239,9 +266,29 @@ class GeoQuest:
             ),
             font=("Arial", 18),
         )
-        self.finished.place(relx=0.5, rely=0.5, anchor="center")
+        self.finished.place(relx=0.5, rely=0.34, anchor="center")
 
-        self.location_map_path = create_location_map(self.location_nodes)
+        self.result_details = customtkinter.CTkLabel(
+            self.app,
+            text=(
+                f"Your time: {user_time}    Project time: {project_time}\n"
+                f"Your distance: {user_distance}    Project distance: {project_distance}"
+            ),
+            font=("Arial", 14),
+        )
+        self.result_details.place(relx=0.5, rely=0.62, anchor="center")
+
+        self.location_map_path = create_location_map(
+            self.location_nodes,
+            project_route=self.project_route_points,
+            waypoints=self.project_waypoints,
+            stats={
+                "Your time": user_time,
+                "Project time": project_time,
+                "Your distance": user_distance,
+                "Project distance": project_distance,
+            },
+        )
         self.map_button = customtkinter.CTkButton(
             self.app,
             text="Open route map",
