@@ -719,14 +719,14 @@ void updateDisplay() {
   if (calibrationFeedback != CALIBRATION_FEEDBACK_NONE) {
     if (now - calibrationFeedbackStartedMs < CALIBRATION_FEEDBACK_DURATION_MS) {
       if (calibrationFeedback == CALIBRATION_FEEDBACK_SUCCESS) {
-        display.println("Kalibratie gelukt");
-        display.println("Kompas actief");
+        display.println("Calibration OK");
+        display.println("Compass active");
       } else if (calibrationFeedback == CALIBRATION_FEEDBACK_TOO_FEW_SAMPLES) {
-        display.println("Te weinig samples");
-        display.println("Draai langer");
+        display.println("Not enough samples");
+        display.println("Rotate longer");
       } else {
-        display.println("Kalibratie onvolledig");
-        display.println("Draai alle assen");
+        display.println("Calibration incomplete");
+        display.println("Rotate all axes");
       }
       display.display();
       return;
@@ -735,14 +735,14 @@ void updateDisplay() {
   }
 
   if (!haveMagCalibration) {
-    display.println("Kalibratie nodig");
-    display.println("Druk knop: start");
+    display.println("Calibration needed");
+    display.println("Press button: start");
     display.display();
     return;
   }
 
   if (routeComplete) {
-    display.println("Route voltooid");
+    display.println("Route completed");
     display.display();
     return;
   }
@@ -759,9 +759,9 @@ void updateDisplay() {
       now - arrivalMessageStartedMs < ARRIVAL_MESSAGE_DURATION_MS) {
     display.setTextSize(2);
     display.setCursor(4, 16);
-    display.println("TUSSENPUNT");
+    display.println("WAYPOINT");
     display.setCursor(22, 40);
-    display.println("BEREIKT");
+    display.println("REACHED");
     display.display();
     return;
   }
@@ -769,42 +769,42 @@ void updateDisplay() {
 
   if (!haveTarget) {
     if (!wifiModuleReady) {
-      display.println("ESP8266 niet klaar");
-      display.println("Controleer module");
+      display.println("ESP8266 not ready");
+      display.println("Check module");
       display.display();
       return;
     }
 
     if (!wifiConnected) {
-      display.println("Wi-Fi verbinden...");
-      display.println("Knop: kalibreren");
+      display.println("Wi-Fi connecting...");
+      display.println("Button: calibrate");
       display.display();
       return;
     }
 
     if (!mqttConnected) {
-      display.println("MQTT verbinden...");
-      display.println("Knop: kalibreren");
+      display.println("MQTT connecting...");
+      display.println("Button: calibrate");
       display.display();
       return;
     }
 
     if (!haveFix) {
-      display.println("GPS: zoeken...");
-      display.println("Knop: kalibreren");
+      display.println("GPS: searching...");
+      display.println("Button: calibrate");
       display.display();
       return;
     }
 
     display.println("GPS OK");
-    display.println("Wacht op NEXT...");
-    display.println("Knop: kalibreren");
+    display.println("Waiting for NEXT...");
+    display.println("Button: calibrate");
     display.display();
     return;
   }
 
   if (!haveFix) {
-    display.println("GPS: zoeken...");
+    display.println("GPS: searching...");
     display.display();
     return;
   }
@@ -816,7 +816,7 @@ void updateDisplay() {
   }
 
   if (!haveHeading) {
-    display.println("IMU: zoeken...");
+    display.println("IMU: searching...");
     display.display();
     return;
   }
